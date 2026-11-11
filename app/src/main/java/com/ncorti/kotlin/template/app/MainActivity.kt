@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
 
     // Kept as a field: the manifest declares configChanges, so rotation does not recreate this
     // activity and the running game inside AppState is never lost.
-    private lateinit var app: AppState
+    internal lateinit var app: AppState
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
