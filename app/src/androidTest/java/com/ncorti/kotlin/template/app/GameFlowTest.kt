@@ -67,6 +67,22 @@ class GameFlowTest {
         device.findObject(By.text(text)).click()
     }
 
+    /** Clicks [text], swiping the scrolling screen up until it becomes visible. */
+    private fun clickScrolling(text: String) {
+        repeat(8) {
+            val obj = device.findObject(By.text(text))
+            if (obj != null) {
+                obj.click()
+                return
+            }
+            val w = device.displayWidth
+            val h = device.displayHeight
+            device.swipe(w / 2, (h * 0.8).toInt(), w / 2, (h * 0.3).toInt(), 12)
+            Thread.sleep(300)
+        }
+        throw AssertionError("'$text' not found even after scrolling")
+    }
+
     private fun <T> onApp(block: (AppState, MainActivity) -> T): T {
         var result: Any? = null
         scenario.onActivity { result = block(it.app, it) }
@@ -281,11 +297,11 @@ class GameFlowTest {
     @Test
     fun settingsAndOrientationPreferenceAreSavedAndApplied() {
         click("Settings")
-        waitFor("Orientation")
+        waitFor("Sound effects")
         shot("07_settings")
-        click("High")
-        click("Joystick")
-        click("Landscape")
+        clickScrolling("High")
+        clickScrolling("Joystick")
+        clickScrolling("Landscape")
         val end = SystemClock.uptimeMillis() + 10_000
         while (SystemClock.uptimeMillis() < end && !isLandscape()) Thread.sleep(100)
         assertTrue("preferred landscape applied", isLandscape())
@@ -308,7 +324,7 @@ class GameFlowTest {
         assertEquals(1.7f, s.sensitivity, 0.001f)
 
         click("Settings")
-        click("Auto")
+        clickScrolling("Auto")
     }
 
     @Test
