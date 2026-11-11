@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     id("com.android.application")
     kotlin("android")
+    alias(libs.plugins.compose.compiler)
 }
 
 val APP_VERSION_NAME : String by project
@@ -18,12 +19,13 @@ android {
         namespace = APP_ID
 
         applicationId = APP_ID
+        targetSdk = libs.versions.target.sdk.version.get().toInt()
         versionCode = APP_VERSION_CODE.toInt()
         versionName = APP_VERSION_NAME
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures {
-        viewBinding = true
+        compose = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -44,19 +46,6 @@ android {
         abortOnError = true
         disable.add("GradleDependency")
     }
-
-    // Use this block to configure different flavors
-//    flavorDimensions("version")
-//    productFlavors {
-//        create("full") {
-//            dimension = "version"
-//            applicationIdSuffix = ".full"
-//        }
-//        create("demo") {
-//            dimension = "version"
-//            applicationIdSuffix = ".demo"
-//        }
-//    }
 }
 
 tasks.withType<KotlinCompile>().configureEach {
@@ -66,18 +55,12 @@ tasks.withType<KotlinCompile>().configureEach {
 }
 
 dependencies {
-    implementation(projects.libraryAndroid)
-    implementation(projects.libraryCompose)
-    implementation(projects.libraryKotlin)
-
-    implementation(libs.androidx.appcompat)
-    implementation(libs.androidx.constraint.layout)
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.material3)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
 
     testImplementation(libs.junit)
-
-    androidTestImplementation(libs.androidx.test.ext.junit)
-    androidTestImplementation(libs.androidx.test.ext.junit.ktx)
-    androidTestImplementation(libs.androidx.test.rules)
-    androidTestImplementation(libs.espresso.core)
 }

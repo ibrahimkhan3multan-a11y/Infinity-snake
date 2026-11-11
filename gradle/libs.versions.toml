@@ -29,6 +29,7 @@ androidx_test_ext_junit = { module = "androidx.test.ext:junit", version.ref = "a
 androidx_test_ext_junit_ktx = { module = "androidx.test.ext:junit-ktx", version.ref = "androidx_test_ext" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
 compose_material = { module = "androidx.compose.material:material" }
+compose_material3 = { module = "androidx.compose.material3:material3" }
 compose_foundation = { module = "androidx.compose.foundation:foundation" }
 compose_ui = { module = "androidx.compose.ui:ui" }
 compose_ui_tooling = { module = "androidx.compose.ui:ui-tooling" }
