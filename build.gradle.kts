@@ -15,6 +15,14 @@ allprojects {
     val USE_SNAPSHOT: String? by project
     group = GROUP
     version = if (USE_SNAPSHOT.toBoolean()) "$VERSION-SNAPSHOT" else VERSION
+
+    // androidx.core 1.19+ requires AGP 9.1+ and compileSdk 37; stay on the
+    // last line that supports AGP 8.x / compileSdk 36, including transitively.
+    configurations.all {
+        resolutionStrategy {
+            force("androidx.core:core:1.17.0", "androidx.core:core-ktx:1.17.0")
+        }
+    }
 }
 
 val detektFormatting = libs.detekt.formatting
