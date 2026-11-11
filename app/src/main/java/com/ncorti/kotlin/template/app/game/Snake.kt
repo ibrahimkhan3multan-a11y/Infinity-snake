@@ -18,7 +18,7 @@ class Snake(val id: Int, val isPlayer: Boolean, val name: String) {
     var targetAngle = 0f
     var mass = Cfg.START_MASS
     var boosting = false
-    var isBoosting = false
+    var boostActive = false
     var alive = false
     var grace = 0f
     var turnMul = 1f
@@ -65,7 +65,7 @@ class Snake(val id: Int, val isPlayer: Boolean, val name: String) {
         }
         alive = true
         boosting = false
-        isBoosting = false
+        boostActive = false
         dropAcc = 0f
     }
 
@@ -77,9 +77,9 @@ class Snake(val id: Int, val isPlayer: Boolean, val name: String) {
         angle += angleDiff(targetAngle, angle).coerceIn(-maxTurn, maxTurn)
         if (angle > PI_F) angle -= TWO_PI else if (angle < -PI_F) angle += TWO_PI
 
-        isBoosting = boosting && mass > Cfg.MIN_BOOST_MASS
-        val speed = if (isBoosting) Cfg.BOOST_SPEED else Cfg.BASE_SPEED
-        if (isBoosting) {
+        boostActive = boosting && mass > Cfg.MIN_BOOST_MASS
+        val speed = if (boostActive) Cfg.BOOST_SPEED else Cfg.BASE_SPEED
+        if (boostActive) {
             val cost = Cfg.BOOST_COST * dt
             mass -= cost
             dropAcc += cost

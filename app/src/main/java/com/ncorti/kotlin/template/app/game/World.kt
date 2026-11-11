@@ -272,7 +272,7 @@ class World(
         if (!s.alive) return
         s.lastRank = rankOf(s)
         s.alive = false
-        s.isBoosting = false
+        s.boostActive = false
         s.deaths++
         dropBody(s)
         val ks = if (k in 0 until snakes.size) snakes[k] else null

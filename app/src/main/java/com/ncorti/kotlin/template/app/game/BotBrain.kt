@@ -94,7 +94,7 @@ object BotBrain {
         }
 
         // 4. Steer around other snakes (and the wall if it is deadly).
-        val look = (if (level == 0) 90f else 120f) + b.radius * 5f + (if (b.isBoosting) 60f else 0f)
+        val look = (if (level == 0) 90f else 120f) + b.radius * 5f + (if (b.boostActive) 60f else 0f)
         val safe = b.radius * 1.8f + 14f
         val tries = if (level == 0) 5 else OFFSETS.size
         var chosen = desired
