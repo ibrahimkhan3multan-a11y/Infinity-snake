@@ -5,6 +5,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -83,3 +86,18 @@ jobs:
             app/build/reports/androidTests/**
             app/build/outputs/androidTest-results/**
           if-no-files-found: warn
+
+      - name: Publish screenshots to the ci-screenshots branch
+        if: always() && github.event_name == 'push'
+        run: |
+          mkdir -p /tmp/shots
+          find app/build/outputs -name '*.png' -exec cp {} /tmp/shots/ \; || true
+          if [ -z "$(ls -A /tmp/shots)" ]; then echo "no screenshots found"; exit 0; fi
+          cd /tmp/shots
+          git init -q
+          git checkout -q -b ci-screenshots
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          git add .
+          git commit -q -m "Emulator screenshots for ${GITHUB_SHA}"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-screenshots
