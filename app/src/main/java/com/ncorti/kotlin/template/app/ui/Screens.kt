@@ -52,7 +52,6 @@ fun SettingsScreen(app: AppState) {
         }
         ChipsRow("Controls", listOf("Touch & drag", "Joystick"), s.controlMode) { s.updateControlMode(it) }
         ChipsRow("Graphics quality", listOf("Low", "Medium", "High"), s.quality) { s.updateQuality(it) }
-        ChipsRow("Orientation", listOf("Auto", "Portrait", "Landscape"), s.orientation) { app.setOrientation(it) }
         Text(
             "Walls apply to new games. Everything is stored on this device only.",
             color = Neon.Dim,

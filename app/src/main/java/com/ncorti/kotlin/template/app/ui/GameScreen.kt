@@ -103,7 +103,7 @@ fun GameScreen(app: AppState, session: GameSession) {
             Modifier
                 .fillMaxSize()
                 .systemGestureExclusion()
-                .pointerInput(settings.controlMode) {
+                .pointerInput(session, settings.controlMode) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         var activeId = down.id
@@ -149,7 +149,7 @@ fun GameScreen(app: AppState, session: GameSession) {
                         session.joystick.active = false
                     }
                 }
-                .pointerInput(Unit) {
+                .pointerInput(session) {
                     // Desktop: a hovering mouse steers without any button pressed.
                     awaitPointerEventScope {
                         while (true) {
@@ -379,7 +379,7 @@ private fun BoostButton(session: GameSession, size: Dp, modifier: Modifier) {
     Box(
         modifier
             .size(size)
-            .pointerInput(Unit) {
+            .pointerInput(session) {
                 // Hold-to-boost that survives the thumb sliding off the button: it only ends when
                 // the finger actually lifts (or the gesture is cancelled).
                 awaitEachGesture {

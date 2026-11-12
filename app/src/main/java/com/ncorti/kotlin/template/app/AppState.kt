@@ -23,9 +23,6 @@ class AppState(
     var session by mutableStateOf<GameSession?>(null)
         private set
 
-    /** Called when the preferred orientation changes so the activity can apply it. */
-    var onOrientationChanged: (Int) -> Unit = {}
-
     init {
         audio.soundEnabled = settings.sound
         audio.musicEnabled = settings.music
@@ -62,11 +59,6 @@ class AppState(
     fun setMusic(v: Boolean) {
         settings.updateMusic(v)
         audio.musicEnabled = v
-    }
-
-    fun setOrientation(v: Int) {
-        settings.updateOrientation(v)
-        onOrientationChanged(v)
     }
 
     /** App went to the background or lost focus: pause a running game. */

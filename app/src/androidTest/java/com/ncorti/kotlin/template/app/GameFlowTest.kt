@@ -126,14 +126,12 @@ class GameFlowTest {
     // ---------------------------------------------------------------- tests
 
     @Test
-    fun firstLaunchShowsFullMenu() {
-        for (label in listOf("PLAY", "SOLO MODE", "Skins", "Settings", "How to Play", "HIGH SCORE", "BEST RANK")) {
+    fun firstLaunchShowsFullMenuInLandscape() {
+        for (label in listOf("PLAY", "SOLO MODE", "Skins", "Shop", "Settings", "How to Play", "HIGH SCORE", "BEST RANK")) {
             waitFor(label)
         }
-        shot("01_menu_portrait")
-        rotateTo(true)
-        waitFor("PLAY")
-        shot("02_menu_landscape")
+        assertTrue("game is landscape-only", isLandscape())
+        shot("01_menu_landscape")
     }
 
     @Test
@@ -149,47 +147,40 @@ class GameFlowTest {
     }
 
     @Test
-    fun rotationDuringGameKeepsStateAndDoesNotRestart() {
+    fun portraitIsRefusedAndLandscapeFlipKeepsTheRun() {
         startSolo()
         onApp { app, _ ->
             val p = app.session!!.world.player
             p.mass = 80f
-            p.grace = 0f
+            p.grace = 100f
         }
-        pad(800)
+        pad(600)
         val before = session()
         val world = before.world
         val massBefore = world.player.mass
         val timeBefore = worldTime()
-        val foodBefore = world.aliveFood
-        val portraitW = before.viewW
 
-        rotateTo(true)
-        pad(1000)
-        val landscape = session()
-        assertSame("same session object after rotating", before, landscape)
-        assertSame("same world object after rotating", world, landscape.world)
+        device.setOrientationNatural() // portrait on a phone: the activity must stay landscape
+        pad(1200)
+        assertTrue("still landscape after asking for portrait", isLandscape())
+        assertSame(before, session())
+
+        device.setOrientationRight() // the other landscape direction
+        pad(1500)
+        assertTrue(isLandscape())
+        val after = session()
+        assertSame("same session after flipping landscape", before, after)
+        assertSame(world, after.world)
         assertTrue("clock kept running", worldTime() > timeBefore)
-        assertTrue("player still alive", landscape.world.player.alive)
-        assertTrue("score kept", landscape.world.player.mass >= massBefore - 0.01f)
-        assertTrue("food field kept (not regenerated)", abs(landscape.world.aliveFood - foodBefore) < 50)
-        assertTrue("viewport is now wide", landscape.viewW > landscape.viewH)
-        assertTrue("viewport changed", landscape.viewW != portraitW)
+        assertTrue("player alive", after.world.player.alive)
+        assertTrue("score kept", after.world.player.mass >= massBefore - 0.01f)
+        assertTrue("viewport is wide", after.viewW > after.viewH)
         assertTrue(device.hasObject(By.text("BOOST")))
-        shot("04_game_landscape")
-
-        val massMid = landscape.world.player.mass
-        rotateTo(false)
-        pad(800)
-        val back = session()
-        assertSame(before, back)
-        assertTrue(back.world.player.alive)
-        assertTrue(back.world.player.mass >= massMid - 0.01f)
-        assertTrue("viewport is tall again", back.viewH > back.viewW)
+        shot("04_game_landscape_flipped")
     }
 
     @Test
-    fun touchSteeringWorksInPortraitAndLandscape() {
+    fun touchSteeringWorksInAllDirections() {
         startSolo()
         onApp { app, _ -> app.session!!.world.player.grace = 100f }
         val w = device.displayWidth
@@ -210,13 +201,13 @@ class GameFlowTest {
         val actual = onApp { app, _ -> app.session!!.world.player.angle }
         assertTrue("snake actually turned up, angle=$actual", abs(actual + 1.5708f) < 0.5f)
 
-        rotateTo(true)
+        // Drag toward the left edge.
         val lw = device.displayWidth
         val lh = device.displayHeight
         device.swipe(lw / 2, lh / 2, (lw * 0.1).toInt(), lh / 2, 8)
         pad(400)
         val left = onApp { app, _ -> app.session!!.input.angle }
-        assertTrue("steered left in landscape, angle=$left", abs(left) > 2.7f)
+        assertTrue("steered left, angle=$left", abs(left) > 2.7f)
     }
 
     @Test
@@ -274,6 +265,54 @@ class GameFlowTest {
     }
 
     @Test
+    fun controlsStillWorkAfterPlayAgain() {
+        startArena()
+        val first = session()
+        onApp { app, _ ->
+            val p = app.session!!.world.player
+            p.grace = 0f
+            p.xs[0] = Cfg.ARENA_RADIUS + 5f
+            p.ys[0] = 0f
+        }
+        waitFor("PLAY AGAIN", 20_000)
+        click("PLAY AGAIN")
+        waitFor("BOOST")
+        val second = session()
+        assertNotSame(first, second)
+        onApp { app, _ -> app.session!!.world.player.grace = 100f }
+        val w = device.displayWidth
+        val h = device.displayHeight
+
+        // Steering must reach the NEW session, not the finished one.
+        device.swipe(w / 2, h / 2, w / 2, (h * 0.15).toInt(), 8)
+        pad(400)
+        val up = onApp { app, _ -> app.session!!.input.angle }
+        assertTrue("new session steered up, angle=$up", abs(up + 1.5708f) < 0.4f)
+        assertTrue("old session untouched", abs(first.input.angle + 1.5708f) > 0.4f || first.world.player.alive.not())
+
+        // Boost must also reach the new session.
+        val boost = device.findObject(By.text("BOOST"))
+        assertNotNull(boost)
+        val e0 = onApp { app, _ -> app.session!!.world.player.energy }
+        boost.click(1200)
+        val e1 = onApp { app, _ -> app.session!!.world.player.energy }
+        assertTrue("boost works after restart: energy $e0 -> $e1", e1 < e0 - 3f)
+
+        // And again via the pause menu's RESTART.
+        onApp { app, _ -> app.session!!.paused = true }
+        waitFor("RESTART")
+        click("RESTART")
+        waitFor("BOOST")
+        val third = session()
+        assertNotSame(second, third)
+        onApp { app, _ -> app.session!!.world.player.grace = 100f }
+        device.swipe(w / 2, h / 2, (w * 0.9).toInt(), h / 2, 8)
+        pad(400)
+        val right = onApp { app, _ -> app.session!!.input.angle }
+        assertTrue("third session steered right, angle=$right", abs(right) < 0.4f)
+    }
+
+    @Test
     fun backgroundingPausesAndResumeContinues() {
         startArena()
         pad(500)
@@ -296,16 +335,12 @@ class GameFlowTest {
     }
 
     @Test
-    fun settingsAndOrientationPreferenceAreSavedAndApplied() {
+    fun settingsAreSavedAcrossRestart() {
         click("Settings")
         waitFor("Sound effects")
         shot("07_settings")
         clickScrolling("High")
         clickScrolling("Joystick")
-        clickScrolling("Landscape")
-        val end = SystemClock.uptimeMillis() + 10_000
-        while (SystemClock.uptimeMillis() < end && !isLandscape()) Thread.sleep(100)
-        assertTrue("preferred landscape applied", isLandscape())
         onApp { app, _ ->
             app.settings.updateVibration(false)
             app.settings.updateSensitivity(1.7f)
@@ -315,17 +350,14 @@ class GameFlowTest {
         scenario.close()
         scenario = ActivityScenario.launch(MainActivity::class.java)
         waitFor("PLAY")
-        assertTrue("restart keeps landscape preference", isLandscape())
+        assertTrue("still landscape", isLandscape())
         val s = Settings(context)
         assertEquals(2, s.quality)
         assertEquals(1, s.controlMode)
-        assertEquals(2, s.orientation)
         assertFalse(s.vibration)
         assertFalse(s.music)
         assertEquals(1.7f, s.sensitivity, 0.001f)
 
-        click("Settings")
-        clickScrolling("Auto")
     }
 
     @Test

@@ -49,9 +49,6 @@ class Settings(context: Context) {
     /** 0 = low, 1 = medium, 2 = high. */
     var quality by mutableIntStateOf(sp.getInt("quality", 1))
         private set
-    /** 0 = auto, 1 = portrait, 2 = landscape. */
-    var orientation by mutableIntStateOf(sp.getInt("orientation", 0))
-        private set
     /** 0 = touch and drag, 1 = virtual joystick. */
     var controlMode by mutableIntStateOf(sp.getInt("control", 0))
         private set
@@ -62,7 +59,6 @@ class Settings(context: Context) {
     fun updateWalls(v: Boolean) { walls = v; sp.edit().putBoolean("walls", v).apply() }
     fun updateSensitivity(v: Float) { sensitivity = v; sp.edit().putFloat("sensitivity", v).apply() }
     fun updateQuality(v: Int) { quality = v; sp.edit().putInt("quality", v).apply() }
-    fun updateOrientation(v: Int) { orientation = v; sp.edit().putInt("orientation", v).apply() }
     fun updateControlMode(v: Int) { controlMode = v; sp.edit().putInt("control", v).apply() }
 
     fun selectSkin(id: Int) {

@@ -1,6 +1,5 @@
 package com.ncorti.kotlin.template.app
 
-import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -8,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -39,8 +39,6 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         app = AppState(Settings(applicationContext), AudioEngine(), Haptics(applicationContext))
-        app.onOrientationChanged = { applyOrientation(it) }
-        applyOrientation(app.settings.orientation)
         hideSystemBars()
 
         setContent {
@@ -74,14 +72,6 @@ class MainActivity : ComponentActivity() {
         c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         c.hide(WindowInsetsCompat.Type.systemBars())
     }
-
-    private fun applyOrientation(mode: Int) {
-        requestedOrientation = when (mode) {
-            1 -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-            2 -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-    }
 }
 
 @Composable
@@ -89,7 +79,7 @@ private fun Root(app: AppState) {
     BackHandler(enabled = app.screen != Screen.MENU && app.screen != Screen.PLAYING) { app.back() }
     when (app.screen) {
         Screen.MENU -> MenuScreen(app)
-        Screen.PLAYING -> app.session?.let { GameScreen(app, it) }
+        Screen.PLAYING -> app.session?.let { s -> key(s) { GameScreen(app, s) } }
         Screen.SKINS -> SkinsScreen(app)
         Screen.SHOP -> ShopScreen(app)
         Screen.SETTINGS -> SettingsScreen(app)
