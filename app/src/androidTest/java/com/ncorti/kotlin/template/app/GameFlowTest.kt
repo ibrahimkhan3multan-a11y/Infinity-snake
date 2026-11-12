@@ -98,7 +98,8 @@ class GameFlowTest {
     }
 
     private fun startSolo() {
-        click("SOLO MODE")
+        click("SOLO")
+        click("PLAY")
         waitFor("BOOST")
     }
 
@@ -111,12 +112,17 @@ class GameFlowTest {
 
     private fun isLandscape(): Boolean = onApp { _, a -> a.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE }
 
-    private fun rotateTo(landscape: Boolean) {
-        if (landscape) device.setOrientationLeft() else device.setOrientationNatural()
-        val end = SystemClock.uptimeMillis() + 10_000
-        while (SystemClock.uptimeMillis() < end && isLandscape() != landscape) Thread.sleep(100)
-        assertEquals("device should be in the requested orientation", landscape, isLandscape())
-        Thread.sleep(600)
+    private fun openSettings() {
+        assertTrue("settings gear on screen", device.wait(Until.hasObject(By.desc("Settings")), 15_000))
+        device.findObject(By.desc("Settings")).click()
+    }
+
+    /** Drags the fixed on-screen joystick from its centre by (dx, dy) pixels, like a real thumb. */
+    private fun joystickDrag(dx: Int, dy: Int) {
+        val home = onApp { app, _ -> app.session!!.joystick.home }
+        val x0 = home.x.toInt()
+        val y0 = home.y.toInt()
+        device.swipe(x0, y0, x0 + dx, y0 + dy, 8)
     }
 
     private fun worldTime(): Float = onApp { app, _ -> app.session!!.world.time }
@@ -127,9 +133,10 @@ class GameFlowTest {
 
     @Test
     fun firstLaunchShowsFullMenuInLandscape() {
-        for (label in listOf("PLAY", "SOLO MODE", "Skins", "Shop", "Settings", "How to Play", "HIGH SCORE", "BEST RANK")) {
+        for (label in listOf("PLAY", "ARENA", "SOLO", "SHOP", "SKINS", "HELP", "BEST SCORE", "BEST RANK", "EDIT SNAKE")) {
             waitFor(label)
         }
+        assertTrue("settings gear present", device.hasObject(By.desc("Settings")))
         assertTrue("game is landscape-only", isLandscape())
         shot("01_menu_landscape")
     }
@@ -180,34 +187,59 @@ class GameFlowTest {
     }
 
     @Test
-    fun touchSteeringWorksInAllDirections() {
+    fun joystickSteersInAllDirections() {
         startSolo()
         onApp { app, _ -> app.session!!.world.player.grace = 100f }
-        val w = device.displayWidth
-        val h = device.displayHeight
 
-        // Drag toward the right edge: expect heading about 0 rad.
-        device.swipe(w / 2, h / 2, (w * 0.9).toInt(), h / 2, 8)
+        joystickDrag(120, 0)
         pad(400)
         val right = onApp { app, _ -> app.session!!.input.angle }
-        assertTrue("steered right, angle=$right", abs(right) < 0.35f)
+        assertTrue("pushed right, angle=$right", abs(right) < 0.3f)
 
-        // Drag toward the top: expect about -PI/2 (screen y grows downward).
-        device.swipe(w / 2, h / 2, w / 2, (h * 0.15).toInt(), 8)
+        joystickDrag(0, -120) // screen y grows downward, so up is -PI/2
         pad(400)
         val up = onApp { app, _ -> app.session!!.input.angle }
-        assertTrue("steered up, angle=$up", abs(up + 1.5708f) < 0.35f)
+        assertTrue("pushed up, angle=$up", abs(up + 1.5708f) < 0.3f)
         pad(1200)
         val actual = onApp { app, _ -> app.session!!.world.player.angle }
         assertTrue("snake actually turned up, angle=$actual", abs(actual + 1.5708f) < 0.5f)
 
-        // Drag toward the left edge.
-        val lw = device.displayWidth
-        val lh = device.displayHeight
-        device.swipe(lw / 2, lh / 2, (lw * 0.1).toInt(), lh / 2, 8)
+        joystickDrag(-120, 0)
         pad(400)
         val left = onApp { app, _ -> app.session!!.input.angle }
-        assertTrue("steered left, angle=$left", abs(left) > 2.7f)
+        assertTrue("pushed left, angle=$left", abs(left) > 2.8f)
+
+        joystickDrag(0, 120)
+        pad(400)
+        val down = onApp { app, _ -> app.session!!.input.angle }
+        assertTrue("pushed down, angle=$down", abs(down - 1.5708f) < 0.3f)
+    }
+
+    @Test
+    fun touchOutsideTheJoystickDoesNotSteerInJoystickMode() {
+        startSolo()
+        onApp { app, _ -> app.session!!.world.player.grace = 100f }
+        joystickDrag(120, 0)
+        pad(300)
+        val before = onApp { app, _ -> app.session!!.input.angle }
+        val w = device.displayWidth
+        val h = device.displayHeight
+        device.swipe(w / 2, h / 2, w / 2, (h * 0.1).toInt(), 8) // far from the ring
+        pad(300)
+        assertEquals(before, onApp { app, _ -> app.session!!.input.angle }, 0.0001f)
+    }
+
+    @Test
+    fun touchAndDragModeStillSteersAnywhere() {
+        onApp { app, _ -> app.settings.updateControlMode(1) }
+        startSolo()
+        onApp { app, _ -> app.session!!.world.player.grace = 100f }
+        val w = device.displayWidth
+        val h = device.displayHeight
+        device.swipe(w / 2, h / 2, w / 2, (h * 0.1).toInt(), 8)
+        pad(400)
+        val up = onApp { app, _ -> app.session!!.input.angle }
+        assertTrue("dragged up, angle=$up", abs(up + 1.5708f) < 0.4f)
     }
 
     @Test
@@ -280,11 +312,9 @@ class GameFlowTest {
         val second = session()
         assertNotSame(first, second)
         onApp { app, _ -> app.session!!.world.player.grace = 100f }
-        val w = device.displayWidth
-        val h = device.displayHeight
 
         // Steering must reach the NEW session, not the finished one.
-        device.swipe(w / 2, h / 2, w / 2, (h * 0.15).toInt(), 8)
+        joystickDrag(0, -120)
         pad(400)
         val up = onApp { app, _ -> app.session!!.input.angle }
         assertTrue("new session steered up, angle=$up", abs(up + 1.5708f) < 0.4f)
@@ -306,7 +336,7 @@ class GameFlowTest {
         val third = session()
         assertNotSame(second, third)
         onApp { app, _ -> app.session!!.world.player.grace = 100f }
-        device.swipe(w / 2, h / 2, (w * 0.9).toInt(), h / 2, 8)
+        joystickDrag(120, 0)
         pad(400)
         val right = onApp { app, _ -> app.session!!.input.angle }
         assertTrue("third session steered right, angle=$right", abs(right) < 0.4f)
@@ -336,11 +366,11 @@ class GameFlowTest {
 
     @Test
     fun settingsAreSavedAcrossRestart() {
-        click("Settings")
+        openSettings()
         waitFor("Sound effects")
         shot("07_settings")
         clickScrolling("High")
-        clickScrolling("Joystick")
+        clickScrolling("Touch & drag")
         onApp { app, _ ->
             app.settings.updateVibration(false)
             app.settings.updateSensitivity(1.7f)
@@ -363,7 +393,7 @@ class GameFlowTest {
     @Test
     fun skinsCanBeUnlockedSelectedAndPersist() {
         onApp { app, _ -> app.settings.recordRun(1600, 1, true) } // earns 400 coins
-        click("Skins")
+        click("SKINS")
         waitFor("Solar Flare")
         shot("08_skins")
         click("Unlock · 60")
@@ -411,7 +441,7 @@ class GameFlowTest {
     @Test
     fun shopBuysPowersAndTankAndPowersWorkInGame() {
         onApp { app, _ -> app.settings.recordRun(1600, 1, true) } // 400 coins
-        click("Shop")
+        click("SHOP")
         waitFor("Boost Tank")
         shot("09_shop")
         clickScrolling("Upgrade · 80") // visible at the top, so do it before scrolling down
@@ -440,6 +470,65 @@ class GameFlowTest {
         pad(400)
         assertTrue("magnet active", onApp { app, _ -> app.session!!.world.player.magnet } > 0f)
         shot("11_powers_active")
+    }
+
+    @Test
+    fun startBigHeadStartCanBeArmedFromTheMenu() {
+        onApp { app, _ ->
+            app.settings.recordRun(400, 1, true) // 100 coins
+            app.settings.buyPower(com.ncorti.kotlin.template.app.game.Powers.HEADSTART)
+        }
+        assertTrue(device.wait(Until.hasObject(By.textStartsWith("START BIG")), 10_000))
+        device.findObject(By.textStartsWith("START BIG")).click()
+        pad(300)
+        assertTrue("armed", onApp { app, _ -> app.headStartArmed })
+        click("PLAY")
+        waitFor("BOOST")
+        assertTrue("run started big", session().world.player.mass >= 59f)
+        assertEquals("one head start consumed", 0, onApp { app, _ -> app.settings.count("start") })
+        assertFalse("disarmed after use", onApp { app, _ -> app.headStartArmed })
+    }
+
+    @Test
+    fun playerNameCanBeEditedAndShowsInGame() {
+        assertTrue(device.wait(Until.hasObject(By.desc("Edit name")), 10_000))
+        device.findObject(By.desc("Edit name")).click()
+        val field = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 8_000)
+        assertNotNull("name dialog open", field)
+        field.text = "Zed"
+        click("Save")
+        pad(500)
+        assertEquals("Zed", Settings(context).playerName)
+        assertTrue(device.wait(Until.hasObject(By.text("Zed")), 5_000))
+        startArena()
+        assertEquals("Zed", session().world.player.name)
+    }
+
+    @Test
+    fun challengesAndDailyRewardWork() {
+        val s = Settings(context)
+        assertTrue(s.canClaimDaily())
+        assertEquals(25, s.claimDaily())
+        assertEquals(0, s.claimDaily())
+        assertFalse(s.canClaimDaily())
+
+        assertFalse(3 in s.unlocked)
+        val done = s.applyChallenges(score = 300, kills = 2, rank = 4, solo = true)
+        assertEquals(listOf(0), done.map { it.id })
+        assertTrue("challenge skin unlocked", 3 in s.unlocked)
+        assertTrue(0 in s.challengeDone)
+        assertEquals(2, s.challengeBest[1])
+        val again = s.applyChallenges(score = 300, kills = 2, rank = 4, solo = true)
+        assertTrue("a challenge completes only once", again.isEmpty())
+
+        val hunter = s.applyChallenges(score = 10, kills = 6, rank = 4, solo = false)
+        assertEquals(listOf(1), hunter.map { it.id })
+        assertEquals(25 + 120, s.coins)
+
+        // And it survives a restart.
+        val reread = Settings(context)
+        assertTrue(0 in reread.challengeDone && 1 in reread.challengeDone)
+        assertFalse(reread.canClaimDaily())
     }
 
     @Test

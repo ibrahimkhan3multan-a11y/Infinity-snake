@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -18,18 +17,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.getBottom
+import androidx.compose.foundation.layout.getLeft
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,12 +42,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -55,17 +56,23 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ncorti.kotlin.template.app.AppState
 import com.ncorti.kotlin.template.app.GameSession
+import com.ncorti.kotlin.template.app.game.Cfg
 import com.ncorti.kotlin.template.app.game.Power
 import com.ncorti.kotlin.template.app.game.Powers
 import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.sin
 
 @Composable
 fun GameScreen(app: AppState, session: GameSession) {
@@ -75,12 +82,12 @@ fun GameScreen(app: AppState, session: GameSession) {
 
     BackHandler { if (session.over) app.toMenu() else session.paused = !session.paused }
 
-    // The game loop: one tick per display frame. It only ticks while this screen is composed and
-    // the app is in the foreground (frames stop when backgrounded; AppState also pauses the run).
+    // One tick per display frame while this screen is composed (frames stop in the background,
+    // and AppState also pauses the run then).
     LaunchedEffect(session) {
         var last = 0L
         while (true) {
-            withFrameNanosCompat { now ->
+            androidx.compose.runtime.withFrameNanos { now ->
                 val dt = if (last == 0L) 0f else (now - last) / 1_000_000_000f
                 last = now
                 session.tick(dt)
@@ -97,7 +104,17 @@ fun GameScreen(app: AppState, session: GameSession) {
             .focusRequester(focusRequester)
             .focusable(),
     ) {
-        val landscape = maxWidth > maxHeight
+        // Fixed joystick position: bottom-left, clear of notches and the nav bar.
+        val density = LocalDensity.current
+        val insets = WindowInsets.safeDrawing
+        val joyR = with(density) { 56.dp.toPx() }
+        val homeX = insets.getLeft(density, LayoutDirection.Ltr) + with(density) { 30.dp.toPx() } + joyR
+        val homeY = constraints.maxHeight - insets.getBottom(density) - with(density) { 24.dp.toPx() } - joyR
+        SideEffect {
+            session.joystick.home = Offset(homeX, homeY)
+            session.joystick.radius = joyR
+            if (!session.joystick.active) session.joystick.knob = session.joystick.home
+        }
 
         Canvas(
             Modifier
@@ -106,55 +123,57 @@ fun GameScreen(app: AppState, session: GameSession) {
                 .pointerInput(session, settings.controlMode) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        var activeId = down.id
-                        val joystick = settings.controlMode == 1
-                        val dead = 14.dp.toPx()
-                        val headDead = 30.dp.toPx() // finger right on the snake: keep the last heading
-                        val maxKnob = 56.dp.toPx()
+                        val joystickMode = settings.controlMode == 0
+                        val j = session.joystick
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
-                        if (joystick) {
-                            session.joystick.base = down.position
-                            session.joystick.knob = down.position
-                            session.joystick.active = true
+                        var activeId = down.id
+
+                        if (joystickMode) {
+                            // The fixed joystick only listens to touches that start near its ring.
+                            if (hypot(down.position.x - j.home.x, down.position.y - j.home.y) > j.radius * 1.9f) {
+                                return@awaitEachGesture
+                            }
+                            j.active = true
                         } else {
-                            steerDrag(session, down.position, w, h, headDead)
+                            steerDrag(session, down.position, w, h, 30.dp.toPx())
                         }
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            // If the steering finger lifts while another is still down, carry on with that one.
-                            val ch = event.changes.firstOrNull { it.id == activeId && it.pressed }
-                                ?: event.changes.firstOrNull { it.pressed }
-                                ?: break
-                            if (ch.id != activeId) {
+                        try {
+                            var first = true
+                            while (true) {
+                                val event = if (first) null else awaitPointerEvent()
+                                val ch = if (event == null) down else (
+                                    event.changes.firstOrNull { it.id == activeId && it.pressed }
+                                        ?: event.changes.firstOrNull { it.pressed }
+                                        ?: break
+                                    )
+                                first = false
                                 activeId = ch.id
-                                if (joystick) {
-                                    session.joystick.base = ch.position
-                                    session.joystick.knob = ch.position
+                                if (joystickMode) {
+                                    val dx = ch.position.x - j.home.x
+                                    val dy = ch.position.y - j.home.y
+                                    val dist = hypot(dx, dy)
+                                    if (dist > 10.dp.toPx()) session.input.angle = atan2(dy, dx)
+                                    val reach = j.radius * 0.8f
+                                    val k = if (dist > reach) reach / dist else 1f
+                                    j.knob = Offset(j.home.x + dx * k, j.home.y + dy * k)
+                                } else {
+                                    steerDrag(session, ch.position, w, h, 30.dp.toPx())
                                 }
+                                ch.consume()
                             }
-                            if (joystick) {
-                                val base = session.joystick.base
-                                val dx = ch.position.x - base.x
-                                val dy = ch.position.y - base.y
-                                val dist = hypot(dx, dy)
-                                if (dist > dead) session.input.angle = atan2(dy, dx)
-                                val k = if (dist > maxKnob) maxKnob / dist else 1f
-                                session.joystick.knob = Offset(base.x + dx * k, base.y + dy * k)
-                            } else {
-                                steerDrag(session, ch.position, w, h, headDead)
-                            }
-                            ch.consume()
+                        } finally {
+                            j.active = false
+                            j.knob = j.home
                         }
-                        session.joystick.active = false
                     }
                 }
                 .pointerInput(session) {
-                    // Desktop: a hovering mouse steers without any button pressed.
+                    // Desktop: a hovering mouse steers without any button pressed (touch & drag mode).
                     awaitPointerEventScope {
                         while (true) {
                             val e = awaitPointerEvent()
-                            if (settings.controlMode != 0) continue
+                            if (settings.controlMode != 1) continue
                             val c = e.changes.firstOrNull() ?: continue
                             if (c.type == PointerType.Mouse) {
                                 steerDrag(session, c.position, size.width.toFloat(), size.height.toFloat(), 6f)
@@ -168,37 +187,48 @@ fun GameScreen(app: AppState, session: GameSession) {
             renderer.draw(this, session, settings.quality)
         }
 
-        if (settings.controlMode == 1) {
-            Canvas(Modifier.fillMaxSize()) {
-                if (session.joystick.active) {
-                    val b = session.joystick.base
-                    val k = session.joystick.knob
-                    drawCircle(Color.White.copy(alpha = 0.10f), 56.dp.toPx(), b)
-                    drawCircle(Color.White.copy(alpha = 0.35f), 56.dp.toPx(), b, style = Stroke(2.dp.toPx()))
-                    drawCircle(Neon.Violet.copy(alpha = 0.8f), 22.dp.toPx(), k)
-                }
-            }
+        if (settings.controlMode == 0) {
+            Canvas(Modifier.fillMaxSize()) { drawJoystick(session) }
         }
 
+        // ---------------------------------------------------------------- HUD
         Box(
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(10.dp),
         ) {
-            StatsPanel(session, landscape, Modifier.align(Alignment.TopStart))
-            Column(Modifier.align(Alignment.TopEnd), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.align(Alignment.TopStart), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HudIconButton({ app.setSound(!settings.sound) }) { drawSpeaker(settings.sound) }
-                    HudIconButton({ session.paused = true }) { drawPauseBars() }
+                    HudIconButton({ session.paused = true }, "Pause") { drawPauseBars() }
+                    HudIconButton({ app.setSound(!settings.sound) }, "Sound") { drawSpeaker(settings.sound) }
                 }
-                Leaderboard(session, if (landscape) 4 else Int.MAX_VALUE)
+                StatsPanel(session)
+                Minimap(session)
             }
+
+            if (session.banner.isNotEmpty()) {
+                Text(
+                    session.banner,
+                    color = Neon.Lime,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 15.sp,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x99000000))
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                )
+            }
+
+            Leaderboard(session, settings.playerName, Modifier.align(Alignment.TopEnd))
+
             Row(
                 Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 4.dp, bottom = if (landscape) 8.dp else 28.dp),
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 124.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Bottom,
             ) {
                 Powers.inGame.forEach { power ->
                     val secs = session.activeSeconds(power)
@@ -206,41 +236,58 @@ fun GameScreen(app: AppState, session: GameSession) {
                     if (secs > 0 || owned > 0) PowerButton(session, power, secs, owned)
                 }
             }
-            BoostButton(
-                session,
-                size = if (landscape) 88.dp else 100.dp,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = if (landscape) 24.dp else 8.dp, bottom = if (landscape) 8.dp else 28.dp),
-            )
+            BoostButton(session, Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 4.dp))
         }
 
+        // ---------------------------------------------------------------- overlays
         val result = session.result
         if (session.over && result != null) {
             Scrim {
-                Text(if (result.newHighScore) "NEW HIGH SCORE!" else "ELIMINATED", color = if (result.newHighScore) Neon.Lime else Neon.Pink, fontSize = 26.sp, fontWeight = FontWeight.Black)
-                ResultRow("Final score", result.score.toString())
-                ResultRow("Best score", result.best.toString())
-                if (!result.solo) ResultRow("Final rank", "#${result.rank}")
-                ResultRow("Snake length", result.length.toString())
-                ResultRow("Coins earned", "+${result.earnedCoins}")
-                NeonButton("PLAY AGAIN", { app.startGame(session.solo) }, Modifier.fillMaxWidth())
-                NeonButton("MAIN MENU", { app.toMenu() }, Modifier.fillMaxWidth(), primary = false)
+                Row(
+                    Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1.3f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            if (result.newHighScore) "NEW HIGH SCORE!" else "ELIMINATED",
+                            color = if (result.newHighScore) Neon.Lime else Neon.Pink,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Black,
+                        )
+                        ResultRow("Final score", result.score.toString())
+                        ResultRow("Best score", result.best.toString())
+                        if (!result.solo) ResultRow("Final rank", "#${result.rank}")
+                        ResultRow("Snake length", result.length.toString())
+                        ResultRow("Coins earned", "+${result.earnedCoins}  (${result.kills} eliminations)")
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        result.challenges.forEach {
+                            Text("Challenge complete! $it", color = Neon.Lime, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        NeonButton("PLAY AGAIN", { app.startGame(session.solo) }, Modifier.fillMaxWidth())
+                        NeonButton("MAIN MENU", { app.toMenu() }, Modifier.fillMaxWidth(), primary = false)
+                    }
+                }
             }
         } else if (session.paused) {
             Scrim {
-                Text("PAUSED", color = Neon.Text, fontSize = 28.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                NeonButton("RESUME", { session.paused = false }, Modifier.fillMaxWidth())
-                NeonButton("RESTART", { app.startGame(session.solo) }, Modifier.fillMaxWidth(), primary = false)
-                NeonButton("MAIN MENU", { app.toMenu() }, Modifier.fillMaxWidth(), primary = false)
+                Column(
+                    Modifier.widthIn(max = 360.dp).fillMaxWidth().padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("PAUSED", color = Neon.Text, fontSize = 26.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
+                    NeonButton("RESUME", { session.paused = false }, Modifier.fillMaxWidth())
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        NeonButton("RESTART", { app.startGame(session.solo) }, Modifier.weight(1f), primary = false)
+                        NeonButton("MAIN MENU", { app.toMenu() }, Modifier.weight(1f), primary = false)
+                    }
+                }
             }
         }
     }
 }
-
-/** Wrapper kept separate so the loop reads clearly. */
-private suspend fun <R> withFrameNanosCompat(block: (Long) -> R): R =
-    androidx.compose.runtime.withFrameNanos(block)
 
 private fun steerDrag(s: GameSession, pos: Offset, w: Float, h: Float, minDist: Float) {
     val p = s.world.player
@@ -263,78 +310,140 @@ private fun handleKey(s: GameSession, e: KeyEvent): Boolean {
     }
 }
 
+// ------------------------------------------------------------------ joystick
+
+private fun DrawScope.drawJoystick(session: GameSession) {
+    val j = session.joystick
+    val c = j.home
+    val r = j.radius
+    val active = j.active
+    drawCircle(Color.White.copy(alpha = if (active) 0.16f else 0.10f), r, c)
+    drawCircle(Color.White.copy(alpha = if (active) 0.65f else 0.40f), r, c, style = Stroke(3.dp.toPx()))
+    // Faint direction ticks around the ring.
+    for (i in 0 until 4) {
+        val a = i * 1.5707964f
+        drawLine(
+            Color.White.copy(alpha = 0.35f),
+            Offset(c.x + cos(a) * r * 0.86f, c.y + sin(a) * r * 0.86f),
+            Offset(c.x + cos(a) * r * 0.97f, c.y + sin(a) * r * 0.97f),
+            2.dp.toPx(),
+            StrokeCap.Round,
+        )
+    }
+    val k = j.knob
+    drawCircle(Color.Black.copy(alpha = 0.25f), r * 0.44f, Offset(k.x, k.y + 3.dp.toPx()))
+    drawCircle(Color.White.copy(alpha = if (active) 1f else 0.85f), r * 0.44f, k)
+    drawCircle(Neon.Violet.copy(alpha = 0.55f), r * 0.2f, k)
+}
+
 // ------------------------------------------------------------------ HUD pieces
 
 @Composable
-private fun StatsPanel(session: GameSession, landscape: Boolean, modifier: Modifier) {
+private fun StatsPanel(session: GameSession) {
     Column(
-        modifier
+        Modifier
             .clip(RoundedCornerShape(14.dp))
             .background(Color(0x66000000))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
-        Text(session.hudScore.toString(), color = Neon.Text, fontSize = if (landscape) 24.sp else 32.sp, fontWeight = FontWeight.Black)
-        Text("SCORE", color = Neon.Dim, fontSize = 10.sp, letterSpacing = 1.sp)
-        val rankText = if (session.solo) "—" else "#${session.hudRank}/${session.hudAlive}"
-        if (landscape) {
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                MiniStat("LENGTH", session.hudLength.toString())
-                if (!session.solo) MiniStat("RANK", rankText)
-            }
-        } else {
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(session.hudScore.toString(), color = Neon.Text, fontSize = 26.sp, fontWeight = FontWeight.Black)
+            Text("SCORE", color = Neon.Dim, fontSize = 10.sp, letterSpacing = 1.sp, modifier = Modifier.padding(bottom = 5.dp))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             MiniStat("LENGTH", session.hudLength.toString())
-            if (!session.solo) MiniStat("RANK", rankText)
+            if (!session.solo) MiniStat("RANK", "#${session.hudRank}/${session.hudAlive}")
         }
     }
 }
 
 @Composable
 private fun MiniStat(label: String, value: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = Neon.Dim, fontSize = 10.sp, letterSpacing = 1.sp)
-        Text(value, color = Neon.Cyan, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Neon.Dim, fontSize = 9.sp, letterSpacing = 1.sp)
+        Text(value, color = Neon.Cyan, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
-private fun Leaderboard(session: GameSession, maxRows: Int) {
-    val board = session.hudBoard
-    if (board.isEmpty()) return
-    Column(
+private fun Minimap(session: GameSession) {
+    Canvas(
         Modifier
-            .widthIn(min = 140.dp, max = 170.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0x66000000))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .size(84.dp)
+            .clip(CircleShape)
+            .background(Color(0x66000000)),
     ) {
-        Text("LEADERBOARD", color = Neon.Dim, fontSize = 9.sp, letterSpacing = 1.sp)
-        board.take(maxRows).forEachIndexed { i, e ->
-            Row(Modifier.fillMaxWidth()) {
-                Text(
-                    "${i + 1}. ${e.name}",
-                    color = if (e.isYou) Neon.Cyan else Neon.Text,
-                    fontSize = 12.sp,
-                    fontWeight = if (e.isYou) FontWeight.Bold else FontWeight.Normal,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                )
-                Text(e.score.toString(), color = if (e.isYou) Neon.Cyan else Neon.Dim, fontSize = 12.sp)
-            }
+        @Suppress("UNUSED_VARIABLE")
+        val tick = session.frame
+        val c = Offset(size.width / 2f, size.height / 2f)
+        val rad = size.width / 2f - 3.dp.toPx()
+        val k = rad / Cfg.ARENA_RADIUS
+        drawCircle(Neon.Pink.copy(alpha = 0.8f), rad, c, style = Stroke(2.dp.toPx()))
+        val world = session.world
+        for (i in 0 until world.snakes.size) {
+            val s = world.snakes[i]
+            if (!s.alive || s.isPlayer) continue
+            drawCircle(Color(0xFFFF8A9B).copy(alpha = 0.85f), 2.2.dp.toPx(), Offset(c.x + s.xs[0] * k, c.y + s.ys[0] * k))
+        }
+        val p = world.player
+        if (p.alive) {
+            val pp = Offset(c.x + p.xs[0] * k, c.y + p.ys[0] * k)
+            drawCircle(Neon.Cyan, 3.6.dp.toPx(), pp)
+            drawLine(Neon.Cyan, pp, Offset(pp.x + cos(p.angle) * 9.dp.toPx(), pp.y + sin(p.angle) * 9.dp.toPx()), 2.dp.toPx())
         }
     }
 }
 
 @Composable
-private fun HudIconButton(onClick: () -> Unit, draw: DrawScope.() -> Unit) {
+private fun Leaderboard(session: GameSession, myName: String, modifier: Modifier) {
+    val board = session.hudBoard
+    if (board.isEmpty()) return
+    Column(
+        modifier
+            .widthIn(min = 150.dp, max = 180.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0x66000000))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Text("LEADERBOARD", color = Neon.Dim, fontSize = 9.sp, letterSpacing = 1.sp)
+        var meShown = false
+        board.take(6).forEachIndexed { i, e ->
+            if (e.isYou) meShown = true
+            BoardRow("${i + 1}. ${e.name}", e.score.toString(), e.isYou)
+        }
+        if (!meShown && !session.solo && session.world.player.alive) {
+            BoardRow("${session.hudRank}. $myName", session.hudScore.toString(), true)
+        }
+    }
+}
+
+@Composable
+private fun BoardRow(name: String, score: String, you: Boolean) {
+    Row(Modifier.fillMaxWidth()) {
+        Text(
+            name,
+            color = if (you) Neon.Cyan else Neon.Text,
+            fontSize = 12.sp,
+            fontWeight = if (you) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+        )
+        Text(score, color = if (you) Neon.Cyan else Neon.Dim, fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun HudIconButton(onClick: () -> Unit, description: String, draw: DrawScope.() -> Unit) {
     Box(
         Modifier
-            .size(44.dp)
+            .size(42.dp)
             .clip(CircleShape)
             .background(Color(0x66000000))
+            .semantics { contentDescription = description }
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Canvas(Modifier.size(20.dp), onDraw = draw)
+        Canvas(Modifier.size(18.dp), onDraw = draw)
     }
 }
 
@@ -368,17 +477,28 @@ private fun DrawScope.drawSpeaker(on: Boolean) {
     }
 }
 
+// ------------------------------------------------------------------ boost + powers
+
+private fun hexPath(c: Offset, r: Float): Path {
+    val p = Path()
+    for (i in 0 until 6) {
+        val a = (-90f + 60f * i) * 0.017453292f
+        val x = c.x + cos(a) * r
+        val y = c.y + sin(a) * r
+        if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
+    }
+    p.close()
+    return p
+}
+
 @Composable
-private fun BoostButton(session: GameSession, size: Dp, modifier: Modifier) {
+private fun BoostButton(session: GameSession, modifier: Modifier) {
     var pressed by remember { mutableStateOf(false) }
     val energy = session.hudEnergy
     val low = energy < 0.15f
-    val brush = Brush.radialGradient(
-        if (pressed && !low) listOf(Neon.Cyan, Color(0xFF0E7490)) else listOf(Neon.Violet, Color(0xFF5B21B6)),
-    )
     Box(
         modifier
-            .size(size)
+            .size(100.dp)
             .pointerInput(session) {
                 // Hold-to-boost that survives the thumb sliding off the button: it only ends when
                 // the finger actually lifts (or the gesture is cancelled).
@@ -402,22 +522,42 @@ private fun BoostButton(session: GameSession, size: Dp, modifier: Modifier) {
             },
         contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.matchParentSize().clip(CircleShape).background(brush))
         Canvas(Modifier.matchParentSize()) {
-            val stroke = 6.dp.toPx()
-            val inset = stroke / 2f
-            drawArc(
-                Color.White.copy(alpha = 0.15f), 0f, 360f, false,
-                topLeft = Offset(inset, inset), size = Size(this.size.width - stroke, this.size.height - stroke),
-                style = Stroke(stroke),
-            )
-            drawArc(
-                if (low) Neon.Pink else Neon.Lime, -90f, 360f * energy, false,
-                topLeft = Offset(inset, inset), size = Size(this.size.width - stroke, this.size.height - stroke),
-                style = Stroke(stroke, cap = StrokeCap.Round),
-            )
+            val c = Offset(size.width / 2f, size.height / 2f)
+            val r = size.minDimension / 2f - 3.dp.toPx()
+            val hex = hexPath(c, r)
+            drawPath(hex, Color(0xCC120A24))
+            // Energy rises from the bottom like liquid in a tank.
+            clipPath(hex) {
+                val top = c.y + r - (2f * r) * energy
+                drawRect(
+                    if (low) Neon.Pink.copy(alpha = 0.85f) else Neon.Lime.copy(alpha = if (pressed) 0.95f else 0.7f),
+                    Offset(c.x - r, top),
+                    Size(2f * r, c.y + r - top),
+                )
+            }
+            drawPath(hex, if (pressed) Neon.Cyan else Color.White.copy(alpha = 0.85f), style = Stroke(4.dp.toPx()))
+            // Lightning bolt.
+            val s = r * 0.42f
+            val bolt = Path().apply {
+                moveTo(c.x + 0.12f * s, c.y - 1.0f * s)
+                lineTo(c.x - 0.60f * s, c.y + 0.10f * s)
+                lineTo(c.x - 0.05f * s, c.y + 0.10f * s)
+                lineTo(c.x - 0.18f * s, c.y + 1.0f * s)
+                lineTo(c.x + 0.60f * s, c.y - 0.15f * s)
+                lineTo(c.x + 0.05f * s, c.y - 0.15f * s)
+                close()
+            }
+            drawPath(bolt, Color.White)
         }
-        Text("BOOST", color = Color.White, fontWeight = FontWeight.Black, fontSize = 15.sp, letterSpacing = 1.sp)
+        Text(
+            "BOOST",
+            color = Color.White,
+            fontWeight = FontWeight.Black,
+            fontSize = 9.sp,
+            letterSpacing = 1.sp,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp),
+        )
     }
 }
 
@@ -426,7 +566,7 @@ private fun PowerButton(session: GameSession, power: Power, secs: Int, owned: In
     val active = secs > 0
     Box(
         Modifier
-            .size(60.dp)
+            .size(58.dp)
             .clip(CircleShape)
             .background(Color(0xAA000000))
             .border(2.dp, if (active) Neon.Cyan else Neon.Violet, CircleShape)
@@ -456,17 +596,7 @@ private fun Scrim(content: @Composable () -> Unit) {
             .pointerInput(Unit) { detectTapGestures { } }
             .windowInsetsPadding(WindowInsets.safeDrawing),
         contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            Modifier
-                .widthIn(max = 380.dp)
-                .fillMaxWidth()
-                .padding(20.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) { content() }
-    }
+    ) { content() }
 }
 
 @Composable
@@ -474,12 +604,11 @@ private fun ResultRow(label: String, value: String) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(Neon.Surface)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp),
     ) {
-        Text(label, color = Neon.Dim, modifier = Modifier.weight(1f))
-        Text(value, color = Neon.Text, fontWeight = FontWeight.Black, textAlign = TextAlign.End)
+        Text(label, color = Neon.Dim, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Text(value, color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 13.sp, textAlign = TextAlign.End)
     }
 }
-

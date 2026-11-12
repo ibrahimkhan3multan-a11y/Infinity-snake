@@ -23,12 +23,23 @@ class AppState(
     var session by mutableStateOf<GameSession?>(null)
         private set
 
+    /** "Start Big" toggle on the menu: the next run uses one owned Head Start. */
+    var headStartArmed by mutableStateOf(false)
+
+    /** Called by a new run: true if it should begin with the Head Start bonus (consumes one). */
+    fun consumeHeadStart(): Boolean {
+        val use = headStartArmed && settings.consumePower("start")
+        headStartArmed = false
+        return use
+    }
+
     init {
         audio.soundEnabled = settings.sound
         audio.musicEnabled = settings.music
     }
 
     fun startGame(solo: Boolean) {
+        settings.updateSoloMode(solo)
         session = GameSession(this, solo)
         screen = Screen.PLAYING
     }

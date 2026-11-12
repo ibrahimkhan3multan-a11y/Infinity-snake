@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.ncorti.kotlin.template.app.game.Challenge
+import com.ncorti.kotlin.template.app.game.Challenges
 import com.ncorti.kotlin.template.app.game.Power
 import com.ncorti.kotlin.template.app.game.Powers
 import com.ncorti.kotlin.template.app.game.Skins
@@ -36,6 +38,19 @@ class Settings(context: Context) {
     var tankLevel by mutableIntStateOf(sp.getInt("tank", 0))
         private set
 
+    var playerName by mutableStateOf(sp.getString("name", null) ?: "Player${100 + (System.nanoTime() % 900).toInt().let { if (it < 0) -it else it }}")
+        private set
+    /** Menu mode toggle: false = Arena (with bots), true = Solo. */
+    var soloMode by mutableStateOf(sp.getBoolean("solo_mode", false))
+        private set
+    var challengeDone by mutableStateOf(parseSet(sp.getString("ch_done", ""), addDefaults = false))
+        private set
+    var challengeBest by mutableStateOf(Challenges.all.associate { it.id to sp.getInt("ch_best_${it.id}", 0) })
+        private set
+    /** Day number (UTC days since 1970) of the last daily reward claim; -1 = never. */
+    var dailyDay by mutableIntStateOf(sp.getInt("daily_day", -1))
+        private set
+
     var sound by mutableStateOf(sp.getBoolean("sound", true))
         private set
     var music by mutableStateOf(sp.getBoolean("music", true))
@@ -49,9 +64,57 @@ class Settings(context: Context) {
     /** 0 = low, 1 = medium, 2 = high. */
     var quality by mutableIntStateOf(sp.getInt("quality", 1))
         private set
-    /** 0 = touch and drag, 1 = virtual joystick. */
+    /** 0 = on-screen joystick (default), 1 = touch and drag. */
     var controlMode by mutableIntStateOf(sp.getInt("control", 0))
         private set
+
+    fun updateName(v: String) {
+        val clean = v.trim().take(12)
+        if (clean.isEmpty()) return
+        playerName = clean
+        sp.edit().putString("name", clean).apply()
+    }
+
+    fun updateSoloMode(v: Boolean) { soloMode = v; sp.edit().putBoolean("solo_mode", v).apply() }
+
+    fun today(): Int = (System.currentTimeMillis() / 86_400_000L).toInt()
+    fun canClaimDaily(): Boolean = dailyDay != today()
+
+    /** Claims the once-a-day coin reward. Returns the coins granted, or 0 if already claimed today. */
+    fun claimDaily(): Int {
+        if (!canClaimDaily()) return 0
+        dailyDay = today()
+        coins += DAILY_COINS
+        sp.edit().putInt("daily_day", dailyDay).putInt("coins", coins).apply()
+        return DAILY_COINS
+    }
+
+    /** Applies a finished run to the challenges; returns the ones completed by it (rewards are granted). */
+    fun applyChallenges(score: Int, kills: Int, rank: Int, solo: Boolean): List<Challenge> {
+        val done = ArrayList<Challenge>()
+        val best = challengeBest.toMutableMap()
+        val ed = sp.edit()
+        for (c in Challenges.all) {
+            if (c.id in challengeDone) continue
+            val p = Challenges.progress(c.id, score, kills, rank, solo)
+            if (p > (best[c.id] ?: 0)) {
+                best[c.id] = minOf(p, c.goal)
+                ed.putInt("ch_best_${c.id}", best[c.id]!!)
+            }
+            if (p >= c.goal) {
+                done.add(c)
+                challengeDone = challengeDone + c.id
+                coins += c.rewardCoins
+                c.rewardSkin?.let { unlocked = unlocked + it }
+            }
+        }
+        challengeBest = best
+        ed.putString("ch_done", challengeDone.joinToString(","))
+            .putInt("coins", coins)
+            .putString("unlocked", unlocked.joinToString(","))
+            .apply()
+        return done
+    }
 
     fun updateSound(v: Boolean) { sound = v; sp.edit().putBoolean("sound", v).apply() }
     fun updateMusic(v: Boolean) { music = v; sp.edit().putBoolean("music", v).apply() }
@@ -111,8 +174,8 @@ class Settings(context: Context) {
     }
 
     /** Records a finished run: high score, best rank (arena only), games and earned coins. */
-    fun recordRun(score: Int, rank: Int, solo: Boolean): Int {
-        val earned = score / 4
+    fun recordRun(score: Int, rank: Int, solo: Boolean, kills: Int = 0): Int {
+        val earned = score / 4 + kills * 5
         highScore = maxOf(highScore, score)
         if (!solo && (bestRank == 0 || rank < bestRank)) bestRank = rank
         coins += earned
@@ -126,10 +189,16 @@ class Settings(context: Context) {
         return earned
     }
 
-    private fun parseSet(csv: String?): Set<Int> {
+    private fun parseSet(csv: String?, addDefaults: Boolean = true): Set<Int> {
         val set = csv.orEmpty().split(",").mapNotNull { it.trim().toIntOrNull() }.toMutableSet()
-        set.add(0)
-        set.add(1)
+        if (addDefaults) {
+            set.add(0)
+            set.add(1)
+        }
         return set
+    }
+
+    companion object {
+        const val DAILY_COINS = 25
     }
 }

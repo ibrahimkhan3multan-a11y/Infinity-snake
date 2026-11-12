@@ -29,6 +29,8 @@ class RunResult(
     val rank: Int,
     val length: Int,
     val earnedCoins: Int,
+    val kills: Int,
+    val challenges: List<String>,
     val newHighScore: Boolean,
     val solo: Boolean,
 )
@@ -45,8 +47,10 @@ class InputState {
 
 /** Virtual joystick visuals (state so the overlay recomposes while dragging). */
 class JoystickState {
+    /** Where the fixed joystick ring sits (screen px) and how big it is; set by the layout. */
+    var home = Offset.Zero
+    var radius = 100f
     var active by mutableStateOf(false)
-    var base by mutableStateOf(Offset.Zero)
     var knob by mutableStateOf(Offset.Zero)
 }
 
@@ -63,6 +67,7 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         deadlyWalls = settings.walls,
         playerSkin = Skins.byId(settings.selectedSkin),
         listener = null,
+        playerName = settings.playerName,
     )
     val particles = Particles(300)
     val input = InputState()
@@ -93,6 +98,10 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         private set
     var hudBoard by mutableStateOf<List<BoardEntry>>(emptyList())
         private set
+    /** Short event text such as "You eliminated Viper"; empty when nothing to show. */
+    var banner by mutableStateOf("")
+        private set
+    private var bannerTimer = 0f
 
     /** Bumped every frame so the canvas redraws; read only inside the draw phase. */
     var frame by mutableLongStateOf(0L)
@@ -116,7 +125,7 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         val me = world.player
         me.maxEnergy = Powers.tankCapacity(settings.tankLevel)
         me.energy = me.maxEnergy
-        if (settings.consumePower(Powers.HEADSTART.id)) {
+        if (app.consumeHeadStart()) {
             me.place(me.xs[0], me.ys[0], me.angle, Cfg.HEADSTART_MASS)
             me.grace = Cfg.SPAWN_GRACE
         }
@@ -153,6 +162,10 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
 
         particles.update(dt)
         updateCamera(dt, p)
+        if (bannerTimer > 0f) {
+            bannerTimer -= dt
+            if (bannerTimer <= 0f) banner = ""
+        }
         hudEnergy = if (p.maxEnergy > 0f) p.energy / p.maxEnergy else 0f
 
         hudTimer -= dt
@@ -233,13 +246,16 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         finalized = true
         val score = p.score
         val previousBest = settings.highScore
-        val earned = settings.recordRun(score, p.lastRank, solo)
+        val earned = settings.recordRun(score, p.lastRank, solo, p.kills)
+        val completed = settings.applyChallenges(score, p.kills, p.lastRank, solo)
         result = RunResult(
             score = score,
             best = settings.highScore,
             rank = p.lastRank,
             length = p.n,
             earnedCoins = earned,
+            kills = p.kills,
+            challenges = completed.map { "${it.title}: ${it.rewardText}" },
             newHighScore = score > previousBest,
             solo = solo,
         )
@@ -259,6 +275,10 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
     }
 
     override fun onSnakeDied(snake: Snake, killer: Snake?) {
+        if (killer != null && killer.isPlayer && !snake.isPlayer) {
+            banner = "You eliminated ${snake.name}!"
+            bannerTimer = 2.5f
+        }
         if (settings.quality > 0) {
             val count = if (settings.quality >= 2) 28 else 14
             particles.burst(snake.xs[0], snake.ys[0], snake.headColor, count, 260f, 6f, rnd)

@@ -1,99 +1,471 @@
 package com.ncorti.kotlin.template.app.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ncorti.kotlin.template.app.AppState
 import com.ncorti.kotlin.template.app.Screen
+import com.ncorti.kotlin.template.app.game.Challenge
+import com.ncorti.kotlin.template.app.game.Challenges
+import com.ncorti.kotlin.template.app.game.Powers
+import com.ncorti.kotlin.template.app.game.Skins
+import kotlin.math.cos
+import kotlin.math.sin
 
+/** Landscape main menu: top bar, event carousel, quick-access column, snake preview, mode toggle and Play. */
 @Composable
 fun MenuScreen(app: AppState) {
     val s = app.settings
-    BoxWithConstraints(Modifier.fillMaxSize().background(BackgroundBrush)) {
-        val landscape = maxWidth > maxHeight
-        val stats: @Composable () -> Unit = {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatCard("HIGH SCORE", s.highScore.toString(), Modifier.weight(1f))
-                StatCard("BEST RANK", if (s.bestRank == 0) "—" else "#${s.bestRank}", Modifier.weight(1f))
-                StatCard("COINS", s.coins.toString(), Modifier.weight(1f))
-            }
-        }
-        val buttons: @Composable () -> Unit = {
-            Column(Modifier.widthIn(max = 420.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                NeonButton("PLAY", { app.startGame(solo = false) }, Modifier.fillMaxWidth())
-                NeonButton("SOLO MODE", { app.startGame(solo = true) }, Modifier.fillMaxWidth(), accent = Neon.Cyan)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    NeonButton("Skins", { app.open(Screen.SKINS) }, Modifier.weight(1f), primary = false)
-                    NeonButton("Shop", { app.open(Screen.SHOP) }, Modifier.weight(1f), primary = false, accent = Neon.Pink)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    NeonButton("Settings", { app.open(Screen.SETTINGS) }, Modifier.weight(1f), primary = false)
-                    NeonButton("How to Play", { app.open(Screen.HOWTO) }, Modifier.weight(1f), primary = false)
-                }
-            }
-        }
-        Column(
+    var editingName by remember { mutableStateOf(false) }
+
+    Box(Modifier.fillMaxSize().background(BackgroundBrush)) {
+        HexBackdrop()
+        BoxWithConstraints(
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(16.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            if (landscape) {
-                Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        LogoBlock(Modifier.widthIn(max = 360.dp), titleSize = 30.sp)
-                        stats()
+            val wide = maxWidth > 700.dp
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // ------------------------------------------------ top bar
+                Row(Modifier.fillMaxWidth().height(54.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RoundIconButton("Settings", { app.open(Screen.SETTINGS) }) { GearIcon() }
+                    NamePill(app) { editingName = true }
+                    if (wide) {
+                        Text(
+                            "INFINITY\nSNAKE",
+                            color = Neon.Cyan,
+                            fontSize = 15.sp,
+                            lineHeight = 16.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 4.sp,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center,
+                        )
+                    } else {
+                        Spacer(Modifier.weight(1f))
                     }
+                    BestPanel(s.highScore, s.bestRank)
+                    CoinPill(s.coins) { app.open(Screen.SHOP) }
+                }
+
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // ------------------------------------------------ carousel + snake bar
+                    Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        EventCarousel(app, Modifier.weight(1f).fillMaxWidth())
+                        SnakeBar(app)
+                    }
+                    // ------------------------------------------------ quick access + play
                     Column(
-                        Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) { buttons() }
+                        Modifier.width(156.dp).fillMaxHeight(),
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        SideChip("SHOP", Neon.Pink) { app.open(Screen.SHOP) }
+                        SideChip("SKINS", Neon.Violet) { app.open(Screen.SKINS) }
+                        SideChip("HELP", Neon.Cyan) { app.open(Screen.HOWTO) }
+                        Spacer(Modifier.weight(1f))
+                        ModeToggle(solo = s.soloMode) { s.updateSoloMode(it) }
+                        NeonButton("PLAY", { app.startGame(s.soloMode) }, Modifier.fillMaxWidth().height(62.dp), accent = Neon.Lime)
+                    }
                 }
+            }
+        }
+    }
+
+    if (editingName) NameDialog(app) { editingName = false }
+}
+
+// ------------------------------------------------------------------ top bar parts
+
+@Composable
+private fun RoundIconButton(description: String, onClick: () -> Unit, icon: @Composable () -> Unit) {
+    Box(
+        Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(Neon.Surface)
+            .border(1.5.dp, Neon.Violet.copy(alpha = 0.6f), CircleShape)
+            .semantics { contentDescription = description }
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { icon() }
+}
+
+@Composable
+private fun GearIcon() {
+    Canvas(Modifier.size(24.dp)) {
+        val c = Offset(size.width / 2f, size.height / 2f)
+        val r = size.width * 0.34f
+        for (i in 0 until 8) {
+            val a = i * 0.7853982f
+            drawLine(
+                Neon.Text, Offset(c.x + cos(a) * r, c.y + sin(a) * r),
+                Offset(c.x + cos(a) * size.width * 0.5f, c.y + sin(a) * size.width * 0.5f),
+                4.dp.toPx(),
+            )
+        }
+        drawCircle(Neon.Text, r, c, style = Stroke(4.dp.toPx()))
+    }
+}
+
+@Composable
+private fun NamePill(app: AppState, onEdit: () -> Unit) {
+    val skin = Skins.byId(app.settings.selectedSkin)
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(23.dp))
+            .background(Neon.Surface)
+            .border(1.5.dp, Neon.Violet.copy(alpha = 0.6f), RoundedCornerShape(23.dp))
+            .semantics { contentDescription = "Edit name" }
+            .clickable(onClick = onEdit)
+            .padding(start = 5.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Canvas(Modifier.size(36.dp)) {
+            val c = Offset(size.width / 2f, size.height / 2f)
+            drawCircle(Color(skin.head), size.width / 2f, c)
+            drawCircle(Color.White, size.width * 0.14f, Offset(c.x + size.width * 0.12f, c.y - size.height * 0.14f))
+            drawCircle(Color.White, size.width * 0.14f, Offset(c.x + size.width * 0.12f, c.y + size.height * 0.14f))
+            drawCircle(Color.Black, size.width * 0.07f, Offset(c.x + size.width * 0.16f, c.y - size.height * 0.14f))
+            drawCircle(Color.Black, size.width * 0.07f, Offset(c.x + size.width * 0.16f, c.y + size.height * 0.14f))
+        }
+        Text(app.settings.playerName, color = Neon.Text, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+        Text("✎", color = Neon.Dim, fontSize = 15.sp)
+    }
+}
+
+@Composable
+private fun BestPanel(best: Int, rank: Int) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Neon.Surface)
+            .padding(horizontal = 14.dp, vertical = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("BEST SCORE", color = Neon.Dim, fontSize = 9.sp, letterSpacing = 1.sp)
+            Text(best.toString(), color = Neon.Cyan, fontSize = 20.sp, fontWeight = FontWeight.Black)
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("BEST RANK", color = Neon.Dim, fontSize = 9.sp, letterSpacing = 1.sp)
+            Text(if (rank == 0) "—" else "#$rank", color = Neon.Lime, fontSize = 20.sp, fontWeight = FontWeight.Black)
+        }
+    }
+}
+
+@Composable
+private fun CoinPill(coins: Int, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(23.dp))
+            .background(Neon.Surface)
+            .border(1.5.dp, Color(0xFFFFD45C).copy(alpha = 0.7f), RoundedCornerShape(23.dp))
+            .semantics { contentDescription = "Coins, open shop" }
+            .clickable(onClick = onClick)
+            .padding(start = 6.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Canvas(Modifier.size(30.dp)) {
+            drawCircle(Color(0xFFFFB300), size.width / 2f)
+            drawCircle(Color(0xFFFFE066), size.width * 0.36f)
+        }
+        Text(coins.toString(), color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 17.sp)
+        Text("+", color = Neon.Lime, fontWeight = FontWeight.Black, fontSize = 20.sp)
+    }
+}
+
+// ------------------------------------------------------------------ carousel
+
+@Composable
+private fun EventCarousel(app: AppState, modifier: Modifier) {
+    val pages = Challenges.all.size + 1
+    val pager = rememberPagerState(pageCount = { pages })
+    Box(modifier) {
+        HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
+            if (page < Challenges.all.size) ChallengeCard(app, Challenges.all[page]) else DailyCard(app)
+        }
+        Row(
+            Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            repeat(pages) { i ->
+                Box(
+                    Modifier
+                        .size(if (pager.currentPage == i) 10.dp else 7.dp)
+                        .clip(CircleShape)
+                        .background(if (pager.currentPage == i) Color.White else Color.White.copy(alpha = 0.35f)),
+                )
+            }
+        }
+    }
+}
+
+private val cardBrushes = listOf(
+    Brush.linearGradient(listOf(Color(0xFF5B21B6), Color(0xFFB0306E))),
+    Brush.linearGradient(listOf(Color(0xFF0E7490), Color(0xFF3B2A9C))),
+    Brush.linearGradient(listOf(Color(0xFFB45309), Color(0xFF7B2FF7))),
+    Brush.linearGradient(listOf(Color(0xFF166534), Color(0xFF0E7490))),
+)
+
+@Composable
+private fun ChallengeCard(app: AppState, c: Challenge) {
+    val s = app.settings
+    val done = c.id in s.challengeDone
+    val best = s.challengeBest[c.id] ?: 0
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(18.dp))
+            .background(cardBrushes[c.id % cardBrushes.size])
+            .padding(16.dp),
+    ) {
+        Column(Modifier.align(Alignment.CenterStart).fillMaxWidth(0.75f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(c.title.uppercase(), color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+            Text(c.desc, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black, lineHeight = 24.sp)
+            Text("Reward: ${c.rewardText}", color = Color(0xFFFFE066), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            if (done) {
+                Text("COMPLETED ✓", color = Neon.Lime, fontSize = 15.sp, fontWeight = FontWeight.Black)
             } else {
-                Column(
-                    Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically),
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(Color.Black.copy(alpha = 0.35f)),
                 ) {
-                    LogoBlock(Modifier.widthIn(max = 420.dp))
-                    stats()
-                    buttons()
+                    Box(
+                        Modifier
+                            .fillMaxWidth((best.toFloat() / c.goal).coerceIn(0f, 1f))
+                            .fillMaxHeight()
+                            .background(Neon.Lime),
+                    )
                 }
+                Text("Best so far: $best / ${c.goal}", color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
             }
         }
     }
 }
 
 @Composable
-private fun StatCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(Neon.Surface)
-            .padding(vertical = 10.dp, horizontal = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+private fun DailyCard(app: AppState) {
+    val s = app.settings
+    val can = s.canClaimDaily()
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(18.dp))
+            .background(cardBrushes[3])
+            .padding(16.dp),
     ) {
-        Text(value, fontSize = 22.sp, fontWeight = FontWeight.Black, color = Neon.Cyan)
-        Text(label, fontSize = 10.sp, color = Neon.Dim, letterSpacing = 1.sp)
+        Column(Modifier.align(Alignment.CenterStart).fillMaxWidth(0.75f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("DAILY REWARD", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+            Text("Free coins, every day", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
+            if (can) {
+                NeonButton("CLAIM ${com.ncorti.kotlin.template.app.data.Settings.DAILY_COINS} COINS", { s.claimDaily() }, Modifier.width(220.dp), accent = Color(0xFFFFD45C))
+            } else {
+                Text("Claimed today. Come back tomorrow!", color = Neon.Lime, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------------ bottom-left bar
+
+@Composable
+private fun SnakeBar(app: AppState) {
+    val s = app.settings
+    val skin = Skins.byId(s.selectedSkin)
+    val owned = s.count(Powers.HEADSTART.id)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(60.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Neon.Surface),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .clickable { app.open(Screen.SKINS) }
+                .padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            SkinPreview(skin, Modifier.width(120.dp).height(44.dp))
+            Column {
+                Text("EDIT SNAKE", color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                Text(skin.name, color = Neon.Dim, fontSize = 11.sp)
+            }
+        }
+        val armed = app.headStartArmed
+        val label = if (owned > 0) "START BIG ×$owned" else "START BIG"
+        Box(
+            Modifier
+                .padding(end = 8.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (armed) Neon.Lime else Color.Transparent)
+                .border(2.dp, if (owned > 0) Neon.Lime else Neon.Dim, RoundedCornerShape(12.dp))
+                .clickable {
+                    if (owned > 0) app.headStartArmed = !armed else app.open(Screen.SHOP)
+                }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Text(
+                label,
+                color = if (armed) Color(0xFF14002B) else if (owned > 0) Neon.Lime else Neon.Dim,
+                fontWeight = FontWeight.Black,
+                fontSize = 12.sp,
+            )
+        }
+    }
+}
+
+// ------------------------------------------------------------------ right column
+
+@Composable
+private fun SideChip(label: String, accent: Color, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Neon.Surface)
+            .border(2.dp, accent.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 15.sp, letterSpacing = 2.sp)
+    }
+}
+
+@Composable
+private fun ModeToggle(solo: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(36.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Neon.Surface),
+    ) {
+        ToggleHalf("ARENA", !solo, Modifier.weight(1f)) { onChange(false) }
+        ToggleHalf("SOLO", solo, Modifier.weight(1f)) { onChange(true) }
+    }
+}
+
+@Composable
+private fun ToggleHalf(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .fillMaxHeight()
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (selected) Neon.Violet else Color.Transparent)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = if (selected) Color(0xFF14002B) else Neon.Dim, fontWeight = FontWeight.Black, fontSize = 13.sp)
+    }
+}
+
+// ------------------------------------------------------------------ dialog + backdrop
+
+@Composable
+private fun NameDialog(app: AppState, onClose: () -> Unit) {
+    var text by remember { mutableStateOf(app.settings.playerName) }
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Your name") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it.take(12) },
+                singleLine = true,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { app.settings.updateName(text); onClose() }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } },
+    )
+}
+
+/** Faint hexagon grid behind the menu. */
+@Composable
+private fun HexBackdrop() {
+    Canvas(Modifier.fillMaxSize()) {
+        val r = 34.dp.toPx()
+        val w = r * 1.7320508f
+        val rowH = r * 1.5f
+        val col = Color.White.copy(alpha = 0.045f)
+        var row = 0
+        var y = 0f
+        while (y < size.height + r) {
+            var x = if (row % 2 == 0) 0f else w / 2f
+            while (x < size.width + w) {
+                for (i in 0 until 6) {
+                    val a1 = (-90f + 60f * i) * 0.017453292f
+                    val a2 = (-90f + 60f * (i + 1)) * 0.017453292f
+                    drawLine(
+                        col,
+                        Offset(x + cos(a1) * r, y + sin(a1) * r),
+                        Offset(x + cos(a2) * r, y + sin(a2) * r),
+                        1.5f,
+                    )
+                }
+                x += w
+            }
+            y += rowH
+            row++
+        }
     }
 }

@@ -24,9 +24,10 @@ class World(
     playerSkin: Skin,
     var listener: WorldListener? = null,
     val ambientFood: Int = Cfg.AMBIENT_FOOD,
+    playerName: String = "You",
 ) {
     val snakes = ArrayList<Snake>(botCount + 1)
-    val player = Snake(0, true, "You")
+    val player = Snake(0, true, playerName)
 
     // Food in parallel arrays (no objects).
     val fx = FloatArray(Cfg.FOOD_CAP)

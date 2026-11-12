@@ -50,7 +50,7 @@ fun SettingsScreen(app: AppState) {
             )
             Text("How quickly your snake turns toward your finger.", color = Neon.Dim, fontSize = 12.sp)
         }
-        ChipsRow("Controls", listOf("Touch & drag", "Joystick"), s.controlMode) { s.updateControlMode(it) }
+        ChipsRow("Controls", listOf("Joystick", "Touch & drag"), s.controlMode) { s.updateControlMode(it) }
         ChipsRow("Graphics quality", listOf("Low", "Medium", "High"), s.quality) { s.updateQuality(it) }
         Text(
             "Walls apply to new games. Everything is stored on this device only.",
@@ -178,7 +178,7 @@ fun SkinPreview(skin: Skin, modifier: Modifier = Modifier) {
 fun HowToScreen(app: AppState) {
     ScreenFrame("How to Play", onBack = { app.back() }) {
         val tips = listOf(
-            "STEER" to "Touch and drag anywhere: your snake turns toward your finger. With the joystick option, drag from where you first touch. On a keyboard use A/D or the arrow keys; with a mouse, just point.",
+            "STEER" to "Drag the on-screen joystick (bottom left): your snake turns the way you push it. In Settings you can switch to touch-and-drag, where the snake turns toward your finger anywhere on screen. On a keyboard use A/D or the arrow keys; with a mouse, just point.",
             "EAT" to "Glowing food makes you grow and raises your score. Bigger snakes turn a little slower.",
             "BOOST" to "Hold the BOOST button (or Space) to speed up. Boost uses its own energy ring and never costs you length or pellets. The ring refills when you let go. Upgrade the Boost Tank in the Shop for a longer boost.",
             "SURVIVE" to "Crash your head into another snake's body, or into the arena wall if walls are deadly, and you're out. Head-to-head, the lighter snake loses.",
