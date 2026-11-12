@@ -167,21 +167,28 @@ class WorldTest {
     }
 
     @Test
-    fun boostStopsWhenEnergyRunsOutThenRegeneratesAndRestarts() {
+    fun emptyTankLimitsBoostToASustainableRateThenRefills() {
         val w = emptyWorld()
         val p = w.player
         p.ready(0f, 0f, 0f, 40f)
         p.boosting = true
-        w.run(4f)
-        assertEquals(0f, p.energy, 0.5f)
-        assertFalse("out of energy: no boost", p.boostActive)
-        assertEquals(40f, p.mass, 0.001f)
+        w.run(10f)
+        // Holding boost on an empty tank pulses: far slower than constant boost, still faster than walking.
+        val full = Cfg.BOOST_SPEED * 10f
+        val walk = Cfg.BASE_SPEED * 10f
+        assertTrue("slower than constant boost: x=${p.xs[0]}", p.xs[0] < full * 0.8f)
+        assertTrue("still faster than walking: x=${p.xs[0]}", p.xs[0] > walk)
+        assertTrue("energy stays low while holding", p.energy < 40f)
+        assertEquals("never costs length", 40f, p.mass, 0.001f)
+        assertEquals("never drops pellets", 0, w.aliveFood)
+
         p.boosting = false
-        w.run(2f)
-        assertTrue("energy refills", p.energy > 30f)
+        w.run(6f)
+        assertEquals("energy refills completely when released", p.maxEnergy, p.energy, 0.001f)
+        assertFalse(p.boostActive)
         p.boosting = true
         w.step(Cfg.STEP)
-        assertTrue("boost works again once refilled", p.boostActive)
+        assertTrue("boost works again", p.boostActive)
     }
 
     @Test
