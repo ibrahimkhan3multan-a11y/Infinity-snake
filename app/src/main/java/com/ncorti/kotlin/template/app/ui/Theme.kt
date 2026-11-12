@@ -78,7 +78,7 @@ fun NeonButton(
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color(0xFF14002B)),
         ) {
-            Text(text, fontSize = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Text(text, fontSize = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, maxLines = 1)
         }
     } else {
         OutlinedButton(
@@ -87,7 +87,7 @@ fun NeonButton(
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = Neon.Text),
         ) {
-            Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }
 }

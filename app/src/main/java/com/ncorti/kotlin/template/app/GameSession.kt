@@ -183,7 +183,7 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
 
     private fun updateCamera(dt: Float, p: Snake) {
         val minDim = minOf(viewW, viewH)
-        val targetZoom = minDim / (680f + 16f * sqrt(p.mass))
+        val targetZoom = minDim / (400f + 12f * sqrt(p.mass))
         if (!camInit) {
             camInit = true
             zoom = targetZoom

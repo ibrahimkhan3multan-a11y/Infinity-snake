@@ -37,21 +37,27 @@ import kotlin.math.sin
 fun SettingsScreen(app: AppState) {
     val s = app.settings
     ScreenFrame("Settings", onBack = { app.back() }) {
-        SwitchRow("Sound effects", s.sound) { app.setSound(it) }
-        SwitchRow("Music", s.music) { app.setMusic(it) }
-        SwitchRow("Vibration", s.vibration) { s.updateVibration(it) }
-        SwitchRow("Deadly arena walls", s.walls) { s.updateWalls(it) }
-        Card {
-            Text("Control sensitivity  ${"%.1f".format(s.sensitivity)}x", color = Neon.Text, fontWeight = FontWeight.SemiBold)
-            Slider(
-                value = s.sensitivity,
-                onValueChange = { s.updateSensitivity(it) },
-                valueRange = 0.5f..2f,
-            )
-            Text("How quickly your snake turns toward your finger.", color = Neon.Dim, fontSize = 12.sp)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                SwitchRow("Sound effects", s.sound) { app.setSound(it) }
+                SwitchRow("Music", s.music) { app.setMusic(it) }
+                SwitchRow("Vibration", s.vibration) { s.updateVibration(it) }
+                SwitchRow("Deadly arena walls", s.walls) { s.updateWalls(it) }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Card {
+                    Text("Control sensitivity  ${"%.1f".format(s.sensitivity)}x", color = Neon.Text, fontWeight = FontWeight.SemiBold)
+                    Slider(
+                        value = s.sensitivity,
+                        onValueChange = { s.updateSensitivity(it) },
+                        valueRange = 0.5f..2f,
+                    )
+                    Text("How quickly your snake turns toward where you steer.", color = Neon.Dim, fontSize = 12.sp)
+                }
+                ChipsRow("Controls", listOf("Joystick", "Touch & drag"), s.controlMode) { s.updateControlMode(it) }
+                ChipsRow("Graphics quality", listOf("Low", "Medium", "High"), s.quality) { s.updateQuality(it) }
+            }
         }
-        ChipsRow("Controls", listOf("Joystick", "Touch & drag"), s.controlMode) { s.updateControlMode(it) }
-        ChipsRow("Graphics quality", listOf("Low", "Medium", "High"), s.quality) { s.updateQuality(it) }
         Text(
             "Walls apply to new games. Everything is stored on this device only.",
             color = Neon.Dim,

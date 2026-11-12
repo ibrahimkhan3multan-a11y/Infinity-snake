@@ -76,7 +76,7 @@ private fun TankCard(app: AppState) {
             NeonButton(
                 "Upgrade · $cost",
                 { s.upgradeTank() },
-                Modifier.width(140.dp),
+                Modifier.width(190.dp),
                 primary = s.coins >= cost,
                 accent = Neon.Pink,
             )
@@ -96,7 +96,7 @@ private fun PowerCard(app: AppState, power: Power) {
         NeonButton(
             "Buy · ${power.cost}",
             { s.buyPower(power) },
-            Modifier.width(120.dp),
+            Modifier.width(160.dp),
             primary = s.coins >= power.cost,
             accent = Neon.Pink,
         )
