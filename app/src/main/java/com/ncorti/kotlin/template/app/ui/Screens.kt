@@ -181,11 +181,12 @@ fun HowToScreen(app: AppState) {
         val tips = listOf(
             "STEER" to "Touch and drag anywhere: your snake turns toward your finger. With the joystick option, drag from where you first touch. On a keyboard use A/D or the arrow keys; with a mouse, just point.",
             "EAT" to "Glowing food makes you grow and raises your score. Bigger snakes turn a little slower.",
-            "BOOST" to "Hold the BOOST button (or Space) to speed up. It burns a little length that you leave behind as food, and it only works while your score is above 15.",
+            "BOOST" to "Hold the BOOST button (or Space) to speed up. Boost uses its own energy ring and never costs you length or pellets. The ring refills when you let go. Upgrade the Boost Tank in the Shop for a longer boost.",
             "SURVIVE" to "Crash your head into another snake's body, or into the arena wall if walls are deadly, and you're out. Head-to-head, the lighter snake loses.",
             "CUT THEM OFF" to "Eliminated snakes explode into food. Circle a rival, let them hit you, and collect the feast.",
             "PLAY & SOLO" to "Play drops you into an arena with 14 offline bots of three difficulty levels. Solo Mode is the same arena with no opponents: grow in peace.",
-            "COINS" to "Every run earns coins (1 per 4 points). Spend them on skins. No purchases, no accounts, no ads: everything stays on your device.",
+            "SHOP" to "Spend coins on powers: Shield (6s invincible), Magnet (wide pickup range), Overdrive (free boost) and Head Start. Tap a power's round button at the bottom left during a run to use it.",
+            "COINS" to "Every run earns coins (1 per 4 points). Spend them on skins and powers. No real-money purchases, no accounts, no ads: everything stays on your device.",
         )
         tips.forEach { (title, body) ->
             Card {

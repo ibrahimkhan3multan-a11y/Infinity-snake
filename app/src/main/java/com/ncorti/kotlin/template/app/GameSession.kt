@@ -1,6 +1,7 @@
 package com.ncorti.kotlin.template.app
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -9,6 +10,8 @@ import androidx.compose.ui.geometry.Offset
 import com.ncorti.kotlin.template.app.game.Cfg
 import com.ncorti.kotlin.template.app.game.PI_F
 import com.ncorti.kotlin.template.app.game.Particles
+import com.ncorti.kotlin.template.app.game.Power
+import com.ncorti.kotlin.template.app.game.Powers
 import com.ncorti.kotlin.template.app.game.Skins
 import com.ncorti.kotlin.template.app.game.Snake
 import com.ncorti.kotlin.template.app.game.TWO_PI
@@ -79,7 +82,14 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         private set
     var hudAlive by mutableIntStateOf(1)
         private set
-    var hudBoostOk by mutableStateOf(true)
+    /** Boost energy 0..1; written every frame, read only by the boost button. */
+    var hudEnergy by mutableFloatStateOf(1f)
+        private set
+    var hudShield by mutableIntStateOf(0)
+        private set
+    var hudMagnet by mutableIntStateOf(0)
+        private set
+    var hudOver by mutableIntStateOf(0)
         private set
     var hudBoard by mutableStateOf<List<BoardEntry>>(emptyList())
         private set
@@ -103,6 +113,13 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
 
     init {
         world.listener = this
+        val me = world.player
+        me.maxEnergy = Powers.tankCapacity(settings.tankLevel)
+        me.energy = me.maxEnergy
+        if (settings.consumePower(Powers.HEADSTART.id)) {
+            me.place(me.xs[0], me.ys[0], me.angle, Cfg.HEADSTART_MASS)
+            me.grace = Cfg.SPAWN_GRACE
+        }
         input.angle = world.player.angle
         camX = world.player.xs[0]
         camY = world.player.ys[0]
@@ -136,6 +153,7 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
 
         particles.update(dt)
         updateCamera(dt, p)
+        hudEnergy = if (p.maxEnergy > 0f) p.energy / p.maxEnergy else 0f
 
         hudTimer -= dt
         if (hudTimer <= 0f) {
@@ -168,13 +186,41 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         zoom += (targetZoom - zoom) * (1f - exp(-3f * dt))
     }
 
+    /** Seconds left of an active power, as last shown on the HUD. */
+    fun activeSeconds(power: Power): Int = when (power.id) {
+        Powers.SHIELD.id -> hudShield
+        Powers.MAGNET.id -> hudMagnet
+        else -> hudOver
+    }
+
+    /** Spends one owned power and switches it on. Does nothing if none owned, already active, or not playing. */
+    fun usePower(power: Power) {
+        val p = world.player
+        if (!p.alive || paused || over) return
+        val active = when (power.id) {
+            Powers.SHIELD.id -> p.shield > 0f
+            Powers.MAGNET.id -> p.magnet > 0f
+            else -> p.overdrive > 0f
+        }
+        if (active || !settings.consumePower(power.id)) return
+        when (power.id) {
+            Powers.SHIELD.id -> p.shield = Cfg.SHIELD_TIME
+            Powers.MAGNET.id -> p.magnet = Cfg.MAGNET_TIME
+            else -> p.overdrive = Cfg.OVERDRIVE_TIME
+        }
+        refreshHud()
+        app.vibrate(25)
+    }
+
     private fun refreshHud() {
         val p = world.player
         hudScore = p.score
         hudLength = p.n
         hudRank = if (p.alive) world.rankOf(p) else p.lastRank
         hudAlive = world.aliveCount()
-        hudBoostOk = p.mass > Cfg.MIN_BOOST_MASS
+        hudShield = kotlin.math.ceil(p.shield).toInt()
+        hudMagnet = kotlin.math.ceil(p.magnet).toInt()
+        hudOver = kotlin.math.ceil(p.overdrive).toInt()
         val list = ArrayList<BoardEntry>(world.boardCount)
         for (i in 0 until world.boardCount) {
             val s = world.board[i] ?: continue

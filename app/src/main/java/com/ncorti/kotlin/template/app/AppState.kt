@@ -7,7 +7,7 @@ import com.ncorti.kotlin.template.app.audio.AudioEngine
 import com.ncorti.kotlin.template.app.audio.Haptics
 import com.ncorti.kotlin.template.app.data.Settings
 
-enum class Screen { MENU, PLAYING, SKINS, SETTINGS, HOWTO }
+enum class Screen { MENU, PLAYING, SKINS, SHOP, SETTINGS, HOWTO }
 
 /**
  * Process-wide UI state. The activity handles configuration changes itself (see the manifest), so

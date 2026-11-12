@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.ncorti.kotlin.template.app.game.Power
+import com.ncorti.kotlin.template.app.game.Powers
 import com.ncorti.kotlin.template.app.game.Skins
 
 /** Everything the game stores locally (SharedPreferences). No accounts, no network. */
@@ -25,6 +27,13 @@ class Settings(context: Context) {
     var selectedSkin by mutableIntStateOf(sp.getInt("skin", 0))
         private set
     var unlocked by mutableStateOf(parseSet(sp.getString("unlocked", "0,1")))
+        private set
+
+    /** Owned consumable powers by id. */
+    var powers by mutableStateOf(Powers.all.associate { it.id to sp.getInt("power_${it.id}", 0) })
+        private set
+    /** Permanent boost-tank upgrade level, 0..Powers.TANK_MAX. */
+    var tankLevel by mutableIntStateOf(sp.getInt("tank", 0))
         private set
 
     var sound by mutableStateOf(sp.getBoolean("sound", true))
@@ -73,6 +82,35 @@ class Settings(context: Context) {
             .putInt("coins", coins)
             .putString("unlocked", unlocked.joinToString(","))
             .apply()
+        return true
+    }
+
+    fun count(id: String): Int = powers[id] ?: 0
+
+    fun buyPower(p: Power): Boolean {
+        if (coins < p.cost || count(p.id) >= Powers.MAX_STOCK) return false
+        coins -= p.cost
+        powers = powers + (p.id to count(p.id) + 1)
+        sp.edit().putInt("coins", coins).putInt("power_${p.id}", count(p.id)).apply()
+        return true
+    }
+
+    /** Uses up one owned power. Returns false if none are left. */
+    fun consumePower(id: String): Boolean {
+        val c = count(id)
+        if (c <= 0) return false
+        powers = powers + (id to c - 1)
+        sp.edit().putInt("power_$id", c - 1).apply()
+        return true
+    }
+
+    fun upgradeTank(): Boolean {
+        if (tankLevel >= Powers.TANK_MAX) return false
+        val cost = Powers.tankCost(tankLevel)
+        if (coins < cost) return false
+        coins -= cost
+        tankLevel += 1
+        sp.edit().putInt("coins", coins).putInt("tank", tankLevel).apply()
         return true
     }
 

@@ -44,9 +44,12 @@ fun MenuScreen(app: AppState) {
                 NeonButton("SOLO MODE", { app.startGame(solo = true) }, Modifier.fillMaxWidth(), accent = Neon.Cyan)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     NeonButton("Skins", { app.open(Screen.SKINS) }, Modifier.weight(1f), primary = false)
-                    NeonButton("Settings", { app.open(Screen.SETTINGS) }, Modifier.weight(1f), primary = false)
+                    NeonButton("Shop", { app.open(Screen.SHOP) }, Modifier.weight(1f), primary = false, accent = Neon.Pink)
                 }
-                NeonButton("How to Play", { app.open(Screen.HOWTO) }, Modifier.fillMaxWidth(), primary = false)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    NeonButton("Settings", { app.open(Screen.SETTINGS) }, Modifier.weight(1f), primary = false)
+                    NeonButton("How to Play", { app.open(Screen.HOWTO) }, Modifier.weight(1f), primary = false)
+                }
             }
         }
         Column(

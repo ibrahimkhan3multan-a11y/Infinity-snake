@@ -242,7 +242,8 @@ class GameFlowTest {
         val speed = dist / dt
         assertTrue("average speed $speed should exceed base ${Cfg.BASE_SPEED}", speed > Cfg.BASE_SPEED * 1.2f)
         val after = onApp { app, _ -> app.session!!.world.player.mass }
-        assertTrue("boost costs length", after < massBefore + 3f)
+        assertTrue("boost must not burn length ($massBefore -> $after)", after >= massBefore - 0.01f)
+        assertTrue("boost spent energy", onApp { app, _ -> app.session!!.world.player.energy } < onApp { app, _ -> app.session!!.world.player.maxEnergy })
         assertFalse("boost released", onApp { app, _ -> app.session!!.input.touchBoost })
     }
 
@@ -351,6 +352,62 @@ class GameFlowTest {
         assertTrue(2 in s.unlocked)
         assertEquals(340, s.coins)
         assertEquals(1600, s.highScore)
+    }
+
+    @Test
+    fun boostKeepsWorkingWhenThumbSlidesOffTheButton() {
+        startSolo()
+        onApp { app, _ -> app.session!!.world.player.grace = 100f }
+        val boost = device.findObject(By.text("BOOST"))
+        assertNotNull(boost)
+        val b = boost.visibleBounds
+        val dur = 1200L
+        // Press on the button, slide far outside its bounds, hold, then release.
+        val steps = 20
+        val x0 = b.centerX()
+        val y0 = b.centerY()
+        val ok = device.swipe(x0, y0, x0 - 400, y0 - 400, steps + 40)
+        assertTrue(ok)
+        // The swipe above lasts about 0.4s; check boosting was active during it by checking energy fell.
+        val energy = onApp { app, _ -> app.session!!.world.player.energy }
+        val max = onApp { app, _ -> app.session!!.world.player.maxEnergy }
+        assertTrue("energy spent while sliding off the button: $energy/$max", energy < max - 3f)
+        assertFalse("boost released afterwards", onApp { app, _ -> app.session!!.input.touchBoost })
+        Thread.sleep(dur / 4)
+    }
+
+    @Test
+    fun shopBuysPowersAndTankAndPowersWorkInGame() {
+        onApp { app, _ -> app.settings.recordRun(1600, 1, true) } // 400 coins
+        click("Shop")
+        waitFor("Boost Tank")
+        shot("09_shop")
+        clickScrolling("Upgrade · 80") // visible at the top, so do it before scrolling down
+        clickScrolling("Buy · 40") // Shield
+        clickScrolling("Buy · 30") // Magnet
+        pad(400)
+        val s = Settings(context)
+        assertEquals(1, s.count("shield"))
+        assertEquals(1, s.count("magnet"))
+        assertEquals(1, s.tankLevel)
+        assertEquals(400 - 40 - 30 - 80, s.coins)
+
+        device.pressBack()
+        waitFor("PLAY")
+        startArena()
+        val maxE = onApp { app, _ -> app.session!!.world.player.maxEnergy }
+        assertEquals("tank upgrade applied", 125f, maxE, 0.01f)
+        onApp { app, _ -> app.session!!.world.player.grace = 0f }
+        waitFor("SHIELD")
+        shot("10_power_buttons")
+        click("SHIELD")
+        pad(400)
+        assertTrue("shield active", onApp { app, _ -> app.session!!.world.player.shield } > 0f)
+        assertEquals("shield consumed", 0, Settings(context).count("shield"))
+        click("MAGNET")
+        pad(400)
+        assertTrue("magnet active", onApp { app, _ -> app.session!!.world.player.magnet } > 0f)
+        shot("11_powers_active")
     }
 
     @Test

@@ -154,16 +154,102 @@ class WorldTest {
     }
 
     @Test
-    fun boostMovesFasterAndCostsMassButStopsAtMinimum() {
+    fun boostIsFasterAndNeverCostsMassOrDropsPellets() {
         val w = emptyWorld()
         val p = w.player
         p.ready(0f, 0f, 0f, 40f)
         p.boosting = true
         w.run(1f)
-        assertTrue(p.xs[0] > Cfg.BASE_SPEED * 1.5f)
-        assertTrue(p.mass < 40f)
-        w.run(20f)
-        assertTrue("boost cannot drain below the minimum", p.mass >= Cfg.MIN_BOOST_MASS - 0.5f)
+        assertTrue("boosting is fast: x=${p.xs[0]}", p.xs[0] > Cfg.BASE_SPEED * 1.5f)
+        assertEquals("boost must not burn length", 40f, p.mass, 0.001f)
+        assertEquals("boost must not drop pellets", 0, w.aliveFood)
+        assertTrue("boost spends energy instead", p.energy < p.maxEnergy - 20f)
+    }
+
+    @Test
+    fun boostStopsWhenEnergyRunsOutThenRegeneratesAndRestarts() {
+        val w = emptyWorld()
+        val p = w.player
+        p.ready(0f, 0f, 0f, 40f)
+        p.boosting = true
+        w.run(4f)
+        assertEquals(0f, p.energy, 0.5f)
+        assertFalse("out of energy: no boost", p.boostActive)
+        assertEquals(40f, p.mass, 0.001f)
+        p.boosting = false
+        w.run(2f)
+        assertTrue("energy refills", p.energy > 30f)
+        p.boosting = true
+        w.step(Cfg.STEP)
+        assertTrue("boost works again once refilled", p.boostActive)
+    }
+
+    @Test
+    fun overdriveGivesFreeBoostWithoutSpendingEnergy() {
+        val w = emptyWorld()
+        val p = w.player
+        p.ready(0f, 0f, 0f, 40f)
+        p.overdrive = Cfg.OVERDRIVE_TIME
+        w.run(2f)
+        assertTrue("auto boost", p.xs[0] > Cfg.BASE_SPEED * 2f * 1.4f)
+        assertEquals("energy untouched", p.maxEnergy, p.energy, 0.001f)
+        w.run(5f)
+        assertEquals("overdrive expires", 0f, p.overdrive, 0.001f)
+    }
+
+    @Test
+    fun shieldSurvivesBodyHitsAndWallsAndKillsHeadOnRivals() {
+        // Body hit
+        val w = emptyWorld()
+        val p = w.player
+        p.ready(0f, 0f, 0f, 10f)
+        p.shield = 10f
+        val bot = w.spawnBot(200f, 100f, PI_F / 2f, 200f, 1)
+        bot.grace = 0f
+        bot.targetAngle = bot.angle
+        w.run(2.5f)
+        assertTrue("shield protects from body crash", p.alive)
+
+        // Deadly wall
+        val w2 = emptyWorld(walls = true)
+        w2.player.ready(Cfg.ARENA_RADIUS - 40f, 0f, 0f, 10f)
+        w2.player.shield = 10f
+        w2.run(1f)
+        assertTrue("shield protects from wall", w2.player.alive)
+
+        // Head on against a much heavier rival: the shielded snake wins.
+        val w3 = emptyWorld()
+        w3.player.ready(-60f, 0f, 0f, 10f)
+        w3.player.shield = 10f
+        val big = w3.spawnBot(60f, 0f, PI_F, 300f, 1)
+        big.grace = 0f
+        w3.run(1f)
+        assertTrue(w3.player.alive)
+        assertFalse("rival hit a shield and died", big.alive)
+    }
+
+    @Test
+    fun shieldRunsOutAndThenCollisionsKillAgain() {
+        val w = emptyWorld(walls = true)
+        w.player.ready(0f, 0f, 0f, 10f)
+        w.player.shield = 0.5f
+        w.player.xs[0] = Cfg.ARENA_RADIUS - 20f
+        w.run(1.5f)
+        assertFalse("shield expired, wall kills", w.player.alive)
+    }
+
+    @Test
+    fun magnetPicksUpFoodFromFarAway() {
+        val w = emptyWorld()
+        val p = w.player
+        p.ready(0f, 0f, 0f, 10f)
+        p.targetAngle = 0f
+        w.addFood(120f, 90f, 2f, 0xFFFFFFFF.toInt()) // ~150 away, off to the side
+        w.step(Cfg.STEP)
+        assertEquals("out of normal reach", 1, w.aliveFood)
+        p.magnet = Cfg.MAGNET_TIME
+        w.step(Cfg.STEP)
+        assertEquals("magnet reaches it", 0, w.aliveFood)
     }
 
     @Test

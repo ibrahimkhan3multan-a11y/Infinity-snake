@@ -19,6 +19,11 @@ class Snake(val id: Int, val isPlayer: Boolean, val name: String) {
     var mass = Cfg.START_MASS
     var boosting = false
     var boostActive = false
+    var energy = Cfg.MAX_ENERGY
+    var maxEnergy = Cfg.MAX_ENERGY
+    var shield = 0f
+    var magnet = 0f
+    var overdrive = 0f
     var alive = false
     var grace = 0f
     var turnMul = 1f
@@ -32,7 +37,6 @@ class Snake(val id: Int, val isPlayer: Boolean, val name: String) {
     var lastRank = 1
     var respawnTimer = 0f
     var thinkTimer = 0f
-    private var dropAcc = 0f
 
     val radius: Float
         get() = minOf(Cfg.MAX_RADIUS, Cfg.BASE_RADIUS + sqrt(mass) * 0.6f)
@@ -66,7 +70,10 @@ class Snake(val id: Int, val isPlayer: Boolean, val name: String) {
         alive = true
         boosting = false
         boostActive = false
-        dropAcc = 0f
+        energy = maxEnergy
+        shield = 0f
+        magnet = 0f
+        overdrive = 0f
     }
 
     fun step(dt: Float, world: World) {
@@ -77,16 +84,19 @@ class Snake(val id: Int, val isPlayer: Boolean, val name: String) {
         angle += angleDiff(targetAngle, angle).coerceIn(-maxTurn, maxTurn)
         if (angle > PI_F) angle -= TWO_PI else if (angle < -PI_F) angle += TWO_PI
 
-        boostActive = boosting && mass > Cfg.MIN_BOOST_MASS
+        if (shield > 0f) shield = max(0f, shield - dt)
+        if (magnet > 0f) magnet = max(0f, magnet - dt)
+        if (overdrive > 0f) overdrive = max(0f, overdrive - dt)
+
+        // Boost runs on its own energy bar: it never burns length or drops pellets. After running
+        // dry it needs a little energy back before it can start again.
+        val wantBoost = boosting || overdrive > 0f
+        boostActive = wantBoost && (overdrive > 0f || energy > (if (boostActive) 0f else Cfg.BOOST_MIN_START))
         val speed = if (boostActive) Cfg.BOOST_SPEED else Cfg.BASE_SPEED
         if (boostActive) {
-            val cost = Cfg.BOOST_COST * dt
-            mass -= cost
-            dropAcc += cost
-            if (dropAcc >= 1.5f) {
-                dropAcc -= 1.5f
-                world.dropTrailFood(this, 1.5f)
-            }
+            if (overdrive <= 0f) energy = max(0f, energy - Cfg.BOOST_DRAIN * dt)
+        } else {
+            energy = minOf(maxEnergy, energy + Cfg.ENERGY_REGEN * dt)
         }
 
         xs[0] += cos(angle) * speed * dt

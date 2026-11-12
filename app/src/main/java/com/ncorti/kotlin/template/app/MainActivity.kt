@@ -19,6 +19,7 @@ import com.ncorti.kotlin.template.app.ui.HowToScreen
 import com.ncorti.kotlin.template.app.ui.InfinityTheme
 import com.ncorti.kotlin.template.app.ui.MenuScreen
 import com.ncorti.kotlin.template.app.ui.SettingsScreen
+import com.ncorti.kotlin.template.app.ui.ShopScreen
 import com.ncorti.kotlin.template.app.ui.SkinsScreen
 
 class MainActivity : ComponentActivity() {
@@ -90,6 +91,7 @@ private fun Root(app: AppState) {
         Screen.MENU -> MenuScreen(app)
         Screen.PLAYING -> app.session?.let { GameScreen(app, it) }
         Screen.SKINS -> SkinsScreen(app)
+        Screen.SHOP -> ShopScreen(app)
         Screen.SETTINGS -> SettingsScreen(app)
         Screen.HOWTO -> HowToScreen(app)
     }

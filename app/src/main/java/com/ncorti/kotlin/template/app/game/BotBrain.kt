@@ -87,7 +87,7 @@ object BotBrain {
             }
             if (bestScore >= 0f) {
                 desired = atan2(by - hy, bx - hx)
-                boost = level >= 1 && bd > 280f && b.mass > 45f && w.rnd.nextFloat() < 0.4f
+                boost = level >= 1 && bd > 280f && b.energy > 45f && w.rnd.nextFloat() < 0.4f
             } else {
                 desired = b.angle + (w.rnd.nextFloat() - 0.5f) * 1.2f
             }

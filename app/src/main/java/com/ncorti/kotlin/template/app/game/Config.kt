@@ -11,8 +11,15 @@ object Cfg {
     const val STEP = 1f / 60f
     const val BASE_SPEED = 170f
     const val BOOST_SPEED = 300f
-    const val BOOST_COST = 4f
-    const val MIN_BOOST_MASS = 15f
+    const val BOOST_DRAIN = 38f      // energy per second while boosting
+    const val ENERGY_REGEN = 20f     // energy per second while not boosting
+    const val BOOST_MIN_START = 15f  // energy needed to (re)start a boost
+    const val MAX_ENERGY = 100f
+    const val SHIELD_TIME = 6f
+    const val MAGNET_TIME = 12f
+    const val OVERDRIVE_TIME = 6f
+    const val MAGNET_REACH = 140f
+    const val HEADSTART_MASS = 60f
     const val TURN_RATE = 6f
     const val BASE_RADIUS = 6f
     const val MAX_RADIUS = 26f

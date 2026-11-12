@@ -3,8 +3,10 @@ package com.ncorti.kotlin.template.app.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -43,6 +45,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
@@ -59,6 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ncorti.kotlin.template.app.AppState
 import com.ncorti.kotlin.template.app.GameSession
+import com.ncorti.kotlin.template.app.game.Power
+import com.ncorti.kotlin.template.app.game.Powers
 import kotlin.math.atan2
 import kotlin.math.hypot
 
@@ -97,11 +102,14 @@ fun GameScreen(app: AppState, session: GameSession) {
         Canvas(
             Modifier
                 .fillMaxSize()
+                .systemGestureExclusion()
                 .pointerInput(settings.controlMode) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        var activeId = down.id
                         val joystick = settings.controlMode == 1
                         val dead = 14.dp.toPx()
+                        val headDead = 30.dp.toPx() // finger right on the snake: keep the last heading
                         val maxKnob = 56.dp.toPx()
                         val w = size.width.toFloat()
                         val h = size.height.toFloat()
@@ -110,12 +118,21 @@ fun GameScreen(app: AppState, session: GameSession) {
                             session.joystick.knob = down.position
                             session.joystick.active = true
                         } else {
-                            steerDrag(session, down.position, w, h)
+                            steerDrag(session, down.position, w, h, headDead)
                         }
                         while (true) {
                             val event = awaitPointerEvent()
-                            val ch = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!ch.pressed) break
+                            // If the steering finger lifts while another is still down, carry on with that one.
+                            val ch = event.changes.firstOrNull { it.id == activeId && it.pressed }
+                                ?: event.changes.firstOrNull { it.pressed }
+                                ?: break
+                            if (ch.id != activeId) {
+                                activeId = ch.id
+                                if (joystick) {
+                                    session.joystick.base = ch.position
+                                    session.joystick.knob = ch.position
+                                }
+                            }
                             if (joystick) {
                                 val base = session.joystick.base
                                 val dx = ch.position.x - base.x
@@ -125,7 +142,7 @@ fun GameScreen(app: AppState, session: GameSession) {
                                 val k = if (dist > maxKnob) maxKnob / dist else 1f
                                 session.joystick.knob = Offset(base.x + dx * k, base.y + dy * k)
                             } else {
-                                steerDrag(session, ch.position, w, h)
+                                steerDrag(session, ch.position, w, h, headDead)
                             }
                             ch.consume()
                         }
@@ -140,7 +157,7 @@ fun GameScreen(app: AppState, session: GameSession) {
                             if (settings.controlMode != 0) continue
                             val c = e.changes.firstOrNull() ?: continue
                             if (c.type == PointerType.Mouse) {
-                                steerDrag(session, c.position, size.width.toFloat(), size.height.toFloat())
+                                steerDrag(session, c.position, size.width.toFloat(), size.height.toFloat(), 6f)
                             }
                         }
                     }
@@ -176,6 +193,18 @@ fun GameScreen(app: AppState, session: GameSession) {
                     HudIconButton({ session.paused = true }) { drawPauseBars() }
                 }
                 Leaderboard(session, if (landscape) 4 else Int.MAX_VALUE)
+            }
+            Row(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 4.dp, bottom = if (landscape) 8.dp else 28.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Powers.inGame.forEach { power ->
+                    val secs = session.activeSeconds(power)
+                    val owned = settings.count(power.id)
+                    if (secs > 0 || owned > 0) PowerButton(session, power, secs, owned)
+                }
             }
             BoostButton(
                 session,
@@ -213,13 +242,13 @@ fun GameScreen(app: AppState, session: GameSession) {
 private suspend fun <R> withFrameNanosCompat(block: (Long) -> R): R =
     androidx.compose.runtime.withFrameNanos(block)
 
-private fun steerDrag(s: GameSession, pos: Offset, w: Float, h: Float) {
+private fun steerDrag(s: GameSession, pos: Offset, w: Float, h: Float, minDist: Float) {
     val p = s.world.player
     val hx = w / 2f + (p.xs[0] - s.camX) * s.zoom
     val hy = h / 2f + (p.ys[0] - s.camY) * s.zoom
     val dx = pos.x - hx
     val dy = pos.y - hy
-    if (dx * dx + dy * dy > 4f) s.input.angle = atan2(dy, dx)
+    if (dx * dx + dy * dy > minDist * minDist) s.input.angle = atan2(dy, dx)
 }
 
 private fun handleKey(s: GameSession, e: KeyEvent): Boolean {
@@ -342,31 +371,77 @@ private fun DrawScope.drawSpeaker(on: Boolean) {
 @Composable
 private fun BoostButton(session: GameSession, size: Dp, modifier: Modifier) {
     var pressed by remember { mutableStateOf(false) }
-    val enabled = session.hudBoostOk
+    val energy = session.hudEnergy
+    val low = energy < 0.15f
     val brush = Brush.radialGradient(
-        if (!enabled) listOf(Color(0xFF3A3354), Color(0xFF241E38))
-        else if (pressed) listOf(Neon.Cyan, Color(0xFF0E7490)) else listOf(Neon.Violet, Color(0xFF5B21B6)),
+        if (pressed && !low) listOf(Neon.Cyan, Color(0xFF0E7490)) else listOf(Neon.Violet, Color(0xFF5B21B6)),
     )
     Box(
         modifier
             .size(size)
-            .clip(CircleShape)
-            .background(brush)
             .pointerInput(Unit) {
-                detectTapGestures(onPress = {
+                // Hold-to-boost that survives the thumb sliding off the button: it only ends when
+                // the finger actually lifts (or the gesture is cancelled).
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    down.consume()
                     pressed = true
                     session.input.touchBoost = true
                     try {
-                        tryAwaitRelease()
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val ch = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!ch.pressed) break
+                            ch.consume()
+                        }
                     } finally {
                         pressed = false
                         session.input.touchBoost = false
                     }
-                })
+                }
             },
         contentAlignment = Alignment.Center,
     ) {
+        Box(Modifier.matchParentSize().clip(CircleShape).background(brush))
+        Canvas(Modifier.matchParentSize()) {
+            val stroke = 6.dp.toPx()
+            val inset = stroke / 2f
+            drawArc(
+                Color.White.copy(alpha = 0.15f), 0f, 360f, false,
+                topLeft = Offset(inset, inset), size = Size(this.size.width - stroke, this.size.height - stroke),
+                style = Stroke(stroke),
+            )
+            drawArc(
+                if (low) Neon.Pink else Neon.Lime, -90f, 360f * energy, false,
+                topLeft = Offset(inset, inset), size = Size(this.size.width - stroke, this.size.height - stroke),
+                style = Stroke(stroke, cap = StrokeCap.Round),
+            )
+        }
         Text("BOOST", color = Color.White, fontWeight = FontWeight.Black, fontSize = 15.sp, letterSpacing = 1.sp)
+    }
+}
+
+@Composable
+private fun PowerButton(session: GameSession, power: Power, secs: Int, owned: Int) {
+    val active = secs > 0
+    Box(
+        Modifier
+            .size(60.dp)
+            .clip(CircleShape)
+            .background(Color(0xAA000000))
+            .border(2.dp, if (active) Neon.Cyan else Neon.Violet, CircleShape)
+            .clickable { session.usePower(power) },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(power.name.uppercase(), color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
+            Text(
+                if (active) "${secs}s" else "×$owned",
+                color = if (active) Neon.Cyan else Neon.Lime,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }
 

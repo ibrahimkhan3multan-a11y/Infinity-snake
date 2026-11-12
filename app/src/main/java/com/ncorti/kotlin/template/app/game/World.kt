@@ -117,11 +117,6 @@ class World(
         freeStack[freeTop++] = i
     }
 
-    fun dropTrailFood(s: Snake, v: Float) {
-        val t = s.n - 1
-        addFood(s.xs[t], s.ys[t], v, s.headColor)
-    }
-
     private fun spawnCluster() {
         val a = rnd.nextFloat() * TWO_PI
         val d = sqrt(rnd.nextFloat()) * (Cfg.ARENA_RADIUS - 60f)
@@ -153,7 +148,7 @@ class World(
     private fun eatFood(s: Snake) {
         val hx = s.xs[0]
         val hy = s.ys[0]
-        val reach = s.radius + 16f
+        val reach = s.radius + 16f + (if (s.magnet > 0f) Cfg.MAGNET_REACH else 0f)
         for (i in 0 until Cfg.FOOD_CAP) {
             if (!falive[i]) continue
             val dx = fx[i] - hx
@@ -197,7 +192,7 @@ class World(
             val lim = Cfg.ARENA_RADIUS - s.radius
             val d2 = hx * hx + hy * hy
             if (d2 > lim * lim) {
-                if (deadlyWalls && s.grace <= 0f) {
+                if (deadlyWalls && s.grace <= 0f && s.shield <= 0f) {
                     killer[i] = WALL
                 } else {
                     val k = lim / sqrt(d2)
@@ -234,7 +229,7 @@ class World(
     private fun collisions(n: Int) {
         for (i in 0 until n) {
             val a = snakes[i]
-            if (!a.alive || a.grace > 0f || killer[i] != NONE) continue
+            if (!a.alive || a.grace > 0f || a.shield > 0f || killer[i] != NONE) continue
             val ax = a.xs[0]
             val ay = a.ys[0]
             val ar = a.radius * 0.8f
@@ -249,7 +244,7 @@ class World(
                 val hdx = ax - b.xs[0]
                 val hdy = ay - b.ys[0]
                 if (hdx * hdx + hdy * hdy < lim2) {
-                    if (a.mass <= b.mass) killer[i] = j
+                    if (b.shield > 0f || a.mass <= b.mass) killer[i] = j
                     continue
                 }
 

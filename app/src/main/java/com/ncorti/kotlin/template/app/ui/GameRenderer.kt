@@ -135,6 +135,17 @@ class GameRenderer {
                 val hy = oy + sn.ys[0] * zoom
                 if (hx < -margin || hx > w + margin || hy < -margin || hy > h + margin) continue
                 if (sn.boostActive && quality >= 1) drawCircle(head.copy(alpha = 0.25f), r * 2.6f, Offset(hx, hy))
+                if (sn.magnet > 0f) {
+                    val mr = (sn.radius + 16f + Cfg.MAGNET_REACH) * zoom
+                    drawCircle(Color(0xFFFF3DAA).copy(alpha = 0.07f), mr, Offset(hx, hy))
+                    drawCircle(Color(0xFFFF3DAA).copy(alpha = 0.5f), mr, Offset(hx, hy), style = Stroke(2f))
+                }
+                if (sn.overdrive > 0f) drawCircle(Color(0xFFFFD45C).copy(alpha = 0.3f), r * 3.2f, Offset(hx, hy))
+                if (sn.shield > 0f) {
+                    val flicker = if (sn.shield < 1.5f && ((time * 10f).toInt() and 1) == 0) 0.35f else 1f
+                    drawCircle(Color(0xFF2DE2E6).copy(alpha = 0.16f * flicker), r * 2.4f, Offset(hx, hy))
+                    drawCircle(Color(0xFF2DE2E6).copy(alpha = 0.9f * flicker), r * 2.4f, Offset(hx, hy), style = Stroke(3f))
+                }
                 val ca = cos(sn.angle)
                 val sa = sin(sn.angle)
                 val eyeR = r * 0.34f
