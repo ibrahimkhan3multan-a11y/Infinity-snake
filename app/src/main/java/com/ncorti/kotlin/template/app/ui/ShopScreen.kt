@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -37,7 +38,7 @@ fun ShopScreen(app: AppState) {
 }
 
 @Composable
-private fun ShopCard(content: @Composable () -> Unit) {
+private fun ShopCard(content: @Composable RowScope.() -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
