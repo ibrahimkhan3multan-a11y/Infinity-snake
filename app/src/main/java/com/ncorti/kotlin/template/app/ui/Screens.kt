@@ -114,13 +114,11 @@ fun SkinsScreen(app: AppState) {
             fontWeight = FontWeight.SemiBold,
         )
         // A non-lazy grid inside the scrolling frame: eight fixed cards.
-        val rows = Skins.all.chunked(2)
-        rows.forEach { pair ->
+        // Landscape: four cards across.
+        Skins.all.chunked(4).forEach { group ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                pair.forEach { skin ->
-                    SkinCard(app, skin, Modifier.weight(1f))
-                }
-                if (pair.size == 1) Spacer(Modifier.weight(1f))
+                group.forEach { skin -> SkinCard(app, skin, Modifier.weight(1f)) }
+                repeat(4 - group.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }

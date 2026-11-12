@@ -396,7 +396,7 @@ class GameFlowTest {
         click("SKINS")
         waitFor("Solar Flare")
         shot("08_skins")
-        click("Unlock · 60")
+        clickScrolling("Unlock · 60")
         pad(500)
         assertEquals(340, onApp { app, _ -> app.settings.coins })
         assertTrue(2 in onApp { app, _ -> app.settings.unlocked })
