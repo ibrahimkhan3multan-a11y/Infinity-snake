@@ -243,9 +243,7 @@ fun GameScreen(app: AppState, session: GameSession) {
                 verticalAlignment = Alignment.Bottom,
             ) {
                 Powers.inGame.forEach { power ->
-                    val secs = session.activeSeconds(power)
-                    val owned = settings.count(power.id)
-                    if (secs > 0 || owned > 0) PowerButton(session, power, secs, owned)
+                    if (settings.powerLevel(power.id) > 0) PowerButton(session, power)
                 }
             }
             BoostButton(session, Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 4.dp))
@@ -627,31 +625,44 @@ private fun BoostButton(session: GameSession, modifier: Modifier) {
 }
 
 @Composable
-private fun PowerButton(session: GameSession, power: Power, secs: Int, owned: Int) {
+private fun PowerButton(session: GameSession, power: Power) {
+    val secs = session.activeSeconds(power)
+    val cd = session.cooldownSeconds(power)
+    val frac = session.cooldownFraction(power)
     val active = secs > 0
+    val ready = !active && cd <= 0
     val pulse = rememberInfiniteTransition(label = "power")
     val glow by pulse.animateFloat(
         0.35f, 1f,
         infiniteRepeatable(tween(650), RepeatMode.Reverse),
         label = "glow",
     )
-    val tint = if (active) Neon.Cyan else Color.White
+    val tint = if (active) Neon.Cyan else if (ready) Color.White else Color(0xFF7C7396)
+    val ring = if (active) Neon.Cyan.copy(alpha = glow) else if (ready) Neon.Lime else Neon.Violet.copy(alpha = 0.5f)
     Box(
         Modifier
-            .size(60.dp)
+            .size(56.dp)
             .bounceClick(sound = null) { session.usePower(power) }
             .clip(CircleShape)
             .background(Color(0xAA000000))
-            .border(2.dp, if (active) Neon.Cyan.copy(alpha = glow) else Neon.Violet, CircleShape)
+            .border(2.dp, ring, CircleShape)
             .semantics { contentDescription = power.name.uppercase() },
         contentAlignment = Alignment.Center,
     ) {
+        if (!active && cd > 0) {
+            // Cooldown sweep: the dark wedge shrinks as the power comes back.
+            Canvas(Modifier.matchParentSize()) {
+                drawArc(
+                    Color(0x99000000), -90f, 360f * frac, true,
+                )
+            }
+        }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Ico(powerIcon(power.id), 24.dp, tint)
+            Ico(powerIcon(power.id), 22.dp, tint)
             Text(
-                if (active) "${secs}s" else "×$owned",
-                color = if (active) Neon.Cyan else Neon.Lime,
-                fontSize = 12.sp,
+                if (active) "${secs}s" else if (cd > 0) "${cd}s" else "READY",
+                color = if (active) Neon.Cyan else if (ready) Neon.Lime else Neon.Dim,
+                fontSize = if (ready) 9.sp else 12.sp,
                 fontWeight = FontWeight.Bold,
             )
         }

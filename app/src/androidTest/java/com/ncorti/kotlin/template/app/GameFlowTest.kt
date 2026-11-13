@@ -459,14 +459,14 @@ class GameFlowTest {
         waitFor("Boost Tank")
         shot("09_shop")
         clickScrolling("Upgrade · 80") // visible at the top, so do it before scrolling down
-        clickScrolling("Buy · 40") // Shield
-        clickScrolling("Buy · 30") // Magnet
+        clickScrolling("Unlock · 60") // Shield
+        clickScrolling("Unlock · 50") // Magnet
         pad(400)
         val s = Settings(context)
-        assertEquals(1, s.count("shield"))
-        assertEquals(1, s.count("magnet"))
+        assertEquals(1, s.powerLevel("shield"))
+        assertEquals(1, s.powerLevel("magnet"))
         assertEquals(1, s.tankLevel)
-        assertEquals(400 - 40 - 30 - 80, s.coins)
+        assertEquals(400 - 60 - 50 - 80, s.coins)
 
         device.pressBack()
         waitFor("PLAY")
@@ -479,7 +479,9 @@ class GameFlowTest {
         device.findObject(By.desc("SHIELD")).click()
         pad(400)
         assertTrue("shield active", onApp { app, _ -> app.session!!.world.player.shield } > 0f)
-        assertEquals("shield consumed", 0, Settings(context).count("shield"))
+        // Powers are permanent: using one never costs coins, but it goes on cooldown.
+        assertEquals(1, Settings(context).powerLevel("shield"))
+        assertTrue("shield on cooldown", onApp { app, _ -> !app.session!!.powerReady(com.ncorti.kotlin.template.app.game.Powers.SHIELD) })
         device.findObject(By.desc("MAGNET")).click()
         pad(400)
         assertTrue("magnet active", onApp { app, _ -> app.session!!.world.player.magnet } > 0f)
@@ -487,20 +489,11 @@ class GameFlowTest {
     }
 
     @Test
-    fun startBigHeadStartCanBeArmedFromTheMenu() {
-        onApp { app, _ ->
-            app.settings.recordRun(400, 1, true) // 100 coins
-            app.settings.buyPower(com.ncorti.kotlin.template.app.game.Powers.HEADSTART)
-        }
-        assertTrue(device.wait(Until.hasObject(By.textStartsWith("START BIG")), 10_000))
-        device.findObject(By.textStartsWith("START BIG")).click()
-        pad(300)
-        assertTrue("armed", onApp { app, _ -> app.headStartArmed })
-        click("PLAY")
-        waitFor("BOOST")
-        assertTrue("run started big", session().world.player.mass >= 59f)
-        assertEquals("one head start consumed", 0, onApp { app, _ -> app.settings.count("start") })
-        assertFalse("disarmed after use", onApp { app, _ -> app.headStartArmed })
+    fun botsStartTheSameSizeAsThePlayer() {
+        startArena()
+        val w = onApp { app, _ -> app.session!!.world }
+        val me = w.player.mass
+        w.snakes.filter { !it.isPlayer }.forEach { assertEquals("bot ${it.name}", me, it.mass, 0.01f) }
     }
 
     @Test

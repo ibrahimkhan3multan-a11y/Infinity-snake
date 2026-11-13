@@ -93,12 +93,6 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
     /** Boost energy 0..1; written every frame, read only by the boost button. */
     var hudEnergy by mutableFloatStateOf(1f)
         private set
-    var hudShield by mutableIntStateOf(0)
-        private set
-    var hudMagnet by mutableIntStateOf(0)
-        private set
-    var hudOver by mutableIntStateOf(0)
-        private set
     var hudBoard by mutableStateOf<List<BoardEntry>>(emptyList())
         private set
     /** Short event text such as "You eliminated Viper"; empty when nothing to show. */
@@ -135,10 +129,6 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         val me = world.player
         me.maxEnergy = Powers.tankCapacity(settings.tankLevel)
         me.energy = me.maxEnergy
-        if (app.consumeHeadStart()) {
-            me.place(me.xs[0], me.ys[0], me.angle, Cfg.HEADSTART_MASS)
-            me.grace = Cfg.SPAWN_GRACE
-        }
         input.angle = world.player.angle
         camX = world.player.xs[0]
         camY = world.player.ys[0]
@@ -171,6 +161,7 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         if (steps == 5) acc = 0f
 
         particles.update(dt)
+        tickPowers(dt)
         updateCamera(dt, p)
         if (bannerTimer > 0f) {
             bannerTimer -= dt
@@ -248,37 +239,100 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         zoom += (targetZoom - zoom) * (1f - exp(-3f * dt))
     }
 
-    /** Seconds left of an active power, as last shown on the HUD. */
-    fun activeSeconds(power: Power): Int = when (power.id) {
-        Powers.SHIELD.id -> hudShield
-        Powers.MAGNET.id -> hudMagnet
-        else -> hudOver
-    }
+    // ---- Powers: permanent, with a cooldown that starts when the effect ends.
 
-    /** Spends one owned power and switches it on. Does nothing if none owned, already active, or not playing. */
-    fun usePower(power: Power) {
+    private val powerWait = FloatArray(Powers.all.size)   // seconds until ready (effect time + cooldown)
+    /** Bumped ~10x a second so power buttons redraw their ring. */
+    var hudPowerTick by mutableIntStateOf(0)
+        private set
+    private var powerTickTimer = 0f
+
+    private fun isActive(power: Power): Boolean {
         val p = world.player
-        if (!p.alive || paused || over) return
-        val active = when (power.id) {
+        return when (power.id) {
             Powers.SHIELD.id -> p.shield > 0f
             Powers.MAGNET.id -> p.magnet > 0f
-            else -> p.overdrive > 0f
+            Powers.OVERDRIVE.id -> p.overdrive > 0f
+            Powers.FREEZE.id -> p.freeze > 0f
+            else -> false
         }
-        if (active || !settings.consumePower(power.id)) return
+    }
+
+    /** Whole seconds of an active effect left (0 when inactive). */
+    fun activeSeconds(power: Power): Int {
+        hudPowerTick
+        val p = world.player
+        val t = when (power.id) {
+            Powers.SHIELD.id -> p.shield
+            Powers.MAGNET.id -> p.magnet
+            Powers.OVERDRIVE.id -> p.overdrive
+            Powers.FREEZE.id -> p.freeze
+            else -> 0f
+        }
+        return kotlin.math.ceil(t).toInt()
+    }
+
+    /** Whole seconds until a power can be used again, once its effect has ended (0 = ready). */
+    fun cooldownSeconds(power: Power): Int {
+        hudPowerTick
+        val i = Powers.all.indexOf(power)
+        val p = world.player
+        val effect = when (power.id) {
+            Powers.SHIELD.id -> p.shield
+            Powers.MAGNET.id -> p.magnet
+            Powers.OVERDRIVE.id -> p.overdrive
+            Powers.FREEZE.id -> p.freeze
+            else -> 0f
+        }
+        return kotlin.math.ceil((powerWait[i] - effect).coerceAtLeast(0f)).toInt()
+    }
+
+    /** 0 = ready, 1 = just started cooling down; drives the ring sweep. */
+    fun cooldownFraction(power: Power): Float {
+        val level = settings.powerLevel(power.id)
+        if (level <= 0) return 0f
+        val total = power.cooldown(level)
+        return if (total <= 0f) 0f else (cooldownSeconds(power) / total).coerceIn(0f, 1f)
+    }
+
+    fun powerReady(power: Power): Boolean =
+        settings.powerLevel(power.id) > 0 && !isActive(power) &&
+            powerWait[Powers.all.indexOf(power)] <= 0f
+
+    /** Activates a power if it is unlocked, off cooldown and you are alive. */
+    fun usePower(power: Power) {
+        val p = world.player
+        if (!p.alive || paused || over || !powerReady(power)) return
+        val level = settings.powerLevel(power.id)
+        val dur = power.duration(level)
         when (power.id) {
-            Powers.SHIELD.id -> p.shield = Cfg.SHIELD_TIME
-            Powers.MAGNET.id -> p.magnet = Cfg.MAGNET_TIME
-            else -> p.overdrive = Cfg.OVERDRIVE_TIME
+            Powers.SHIELD.id -> p.shield = dur
+            Powers.MAGNET.id -> p.magnet = dur
+            Powers.OVERDRIVE.id -> p.overdrive = dur
+            Powers.FREEZE.id -> p.freeze = dur
+            else -> p.energy = p.maxEnergy
         }
+        powerWait[Powers.all.indexOf(power)] = dur + power.cooldown(level)
         refreshHud()
+        hudPowerTick++
         app.audio.play(
             when (power.id) {
                 Powers.SHIELD.id -> Sfx.SHIELD
                 Powers.MAGNET.id -> Sfx.MAGNET
-                else -> Sfx.OVERDRIVE
+                Powers.OVERDRIVE.id -> Sfx.OVERDRIVE
+                else -> Sfx.POWER
             },
         )
         app.vibrate(25)
+    }
+
+    private fun tickPowers(dt: Float) {
+        for (i in powerWait.indices) if (powerWait[i] > 0f) powerWait[i] = (powerWait[i] - dt).coerceAtLeast(0f)
+        powerTickTimer -= dt
+        if (powerTickTimer <= 0f) {
+            powerTickTimer = 0.1f
+            hudPowerTick++
+        }
     }
 
     private fun refreshHud() {
@@ -287,9 +341,6 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         hudLength = p.n
         hudRank = if (p.alive) world.rankOf(p) else p.lastRank
         hudAlive = world.aliveCount()
-        hudShield = kotlin.math.ceil(p.shield).toInt()
-        hudMagnet = kotlin.math.ceil(p.magnet).toInt()
-        hudOver = kotlin.math.ceil(p.overdrive).toInt()
         val list = ArrayList<BoardEntry>(world.boardCount)
         for (i in 0 until world.boardCount) {
             val s = world.board[i] ?: continue

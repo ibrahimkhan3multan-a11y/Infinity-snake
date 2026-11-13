@@ -315,4 +315,41 @@ class WorldTest {
         assertTrue(abs(w.time - 60f * minutes) < 1f)
         assertTrue(respawns >= 0)
     }
+
+    @Test
+    fun powerLevelsScaleDurationAndCooldownAsDesigned() {
+        val sh = Powers.SHIELD
+        assertEquals(6f, sh.duration(1), 0.001f)
+        assertEquals(30f, sh.cooldown(1), 0.001f)
+        assertEquals(15f, sh.duration(5), 0.001f)
+        assertEquals(15f, sh.cooldown(5), 0.001f)
+        for (p in Powers.all) {
+            for (l in 1 until Powers.MAX_LEVEL) {
+                assertTrue("${p.id} cooldown shrinks", p.cooldown(l + 1) < p.cooldown(l))
+                assertTrue("${p.id} lasts longer", p.duration(l + 1) >= p.duration(l))
+                assertTrue("${p.id} upgrade costs more", p.costFor(l + 1) > p.costFor(l))
+            }
+        }
+    }
+
+    @Test
+    fun freezeSlowsNearbyRivalsOnly() {
+        val w = emptyWorld(seed = 5)
+        val near = w.spawnBot(100f, 0f, 0f, Cfg.START_MASS, 0)
+        val far = w.spawnBot(1500f, 0f, 0f, Cfg.START_MASS, 0)
+        w.player.place(0f, 0f, 0f, Cfg.START_MASS)
+        w.player.freeze = 3f
+        val nx = near.xs[0]
+        val fx = far.xs[0]
+        repeat(30) { w.step(Cfg.STEP) }
+        val nearMoved = near.xs[0] - nx
+        val farMoved = far.xs[0] - fx
+        assertTrue("near rival slowed ($nearMoved vs $farMoved)", nearMoved < farMoved * 0.8f)
+    }
+
+    @Test
+    fun allBotsStartTheSameSizeAsThePlayer() {
+        val w = World(Random(9), botCount = Cfg.BOT_COUNT, deadlyWalls = false, playerSkin = skin)
+        w.snakes.filter { !it.isPlayer }.forEach { assertEquals(Cfg.START_MASS, it.mass, 0.01f) }
+    }
 }

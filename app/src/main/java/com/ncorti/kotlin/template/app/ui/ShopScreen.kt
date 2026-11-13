@@ -1,6 +1,8 @@
 package com.ncorti.kotlin.template.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,7 +35,7 @@ fun ShopScreen(app: AppState) {
         )
         Text("PERMANENT UPGRADE", color = Neon.Dim, fontSize = 11.sp, letterSpacing = 1.sp)
         TankCard(app)
-        Text("POWERS  ·  use them during a run", color = Neon.Dim, fontSize = 11.sp, letterSpacing = 1.sp)
+        Text("POWERS  ·  unlock once, use them every run, upgrade for longer use and shorter cooldown", color = Neon.Dim, fontSize = 11.sp, letterSpacing = 1.sp)
         Powers.all.forEach { PowerCard(app, it) }
     }
 }
@@ -93,21 +95,55 @@ private fun TankCard(app: AppState) {
 private fun PowerCard(app: AppState, power: Power) {
     val s = app.settings
     val audio = LocalAudio.current
+    val level = s.powerLevel(power.id)
+    val shown = level.coerceAtLeast(1)
+    val maxed = level >= Powers.MAX_LEVEL
     ShopCard {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Ico(powerIcon(power.id), 20.dp, Neon.Cyan)
+                Ico(if (level > 0) powerIcon(power.id) else Ico.LOCK, 20.dp, if (level > 0) Neon.Cyan else Neon.Dim)
                 Text(power.name, color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 17.sp)
+                if (level > 0) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        repeat(Powers.MAX_LEVEL) { i ->
+                            Box(
+                                Modifier
+                                    .size(width = 14.dp, height = 6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(if (i < level) Neon.Lime else Neon.Dim.copy(alpha = 0.3f)),
+                            )
+                        }
+                    }
+                }
             }
             Text(power.desc, color = Neon.Dim, fontSize = 12.sp)
-            Text("Owned: ${s.count(power.id)}", color = Neon.Cyan, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            val dur = power.duration(shown)
+            val cd = power.cooldown(shown)
+            val now = (if (dur > 0f) "Lasts ${dur.toInt()}s  ·  " else "Instant  ·  ") + "cooldown ${cd.toInt()}s"
+            Text(
+                if (level == 0) "Level 1: $now" else "Level $level/${Powers.MAX_LEVEL}: $now",
+                color = Neon.Cyan, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+            )
+            if (level in 1 until Powers.MAX_LEVEL) {
+                val nd = power.duration(level + 1)
+                val nc = power.cooldown(level + 1)
+                Text(
+                    "Next: " + (if (nd > 0f) "${nd.toInt()}s use  ·  " else "") + "${nc.toInt()}s cooldown",
+                    color = Neon.Lime, fontSize = 11.sp,
+                )
+            }
         }
-        NeonButton(
-            "Buy · ${power.cost}",
-            { if (s.buyPower(power)) audio.play(Sfx.COIN) else audio.play(Sfx.DENIED) },
-            Modifier.width(160.dp),
-            primary = s.coins >= power.cost,
-            accent = Neon.Pink,
-        )
+        if (maxed) {
+            Text("MAX", color = Neon.Lime, fontWeight = FontWeight.Black, modifier = Modifier.width(160.dp))
+        } else {
+            val cost = power.costFor(level)
+            NeonButton(
+                (if (level == 0) "Unlock" else "Upgrade") + " · $cost",
+                { if (s.upgradePower(power)) audio.play(Sfx.COIN) else audio.play(Sfx.DENIED) },
+                Modifier.width(160.dp),
+                primary = s.coins >= cost,
+                accent = Neon.Pink,
+            )
+        }
     }
 }

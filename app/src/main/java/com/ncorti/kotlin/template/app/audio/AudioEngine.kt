@@ -25,6 +25,7 @@ enum class Sfx(val volume: Float, val minGapMs: Long) {
     SHIELD(0.6f, 200),
     MAGNET(0.6f, 200),
     OVERDRIVE(0.6f, 200),
+    POWER(0.6f, 200),
     COIN(0.6f, 120),
     FANFARE(0.75f, 500),
     START(0.6f, 300),
@@ -235,6 +236,10 @@ class AudioEngine {
                     ph += tau(200 + 1100 * p * p) / RATE
                     (sin(ph) + 0.4 * sin(2 * ph)) * exp(-1.2 * p)
                 }
+            }
+            Sfx.POWER -> synth(420, 0.5) { t, p ->
+                val f = 900 + 1500 * p
+                (sin(tau(f * t)) + 0.5 * sin(tau(f * 1.5 * t))) * 0.6 * sin(PI * p) * exp(-1.5 * p)
             }
             Sfx.COIN -> synth(280, 0.4) { t, p ->
                 val first = p < 0.4

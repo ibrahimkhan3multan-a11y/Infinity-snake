@@ -66,7 +66,7 @@ class World(
 
         for (i in 1..botCount) {
             findSpawn(500f)
-            spawnBot(tmp[0], tmp[1], rnd.nextFloat() * TWO_PI - PI_F, 10f + rnd.nextFloat() * 60f, (i - 1) % 3)
+            spawnBot(tmp[0], tmp[1], rnd.nextFloat() * TWO_PI - PI_F, Cfg.START_MASS, (i - 1) % 3)
         }
 
         var guard = 0
@@ -169,6 +169,21 @@ class World(
         time += dt
         val n = snakes.size
         for (i in 0 until n) killer[i] = NONE
+
+        // Freeze: slow every other snake close to a freezer.
+        for (i in 0 until n) {
+            val f = snakes[i]
+            if (!f.alive || f.freeze <= 0f) continue
+            val r2 = Cfg.FREEZE_RADIUS * Cfg.FREEZE_RADIUS
+            for (j in 0 until n) {
+                if (j == i) continue
+                val o = snakes[j]
+                if (!o.alive) continue
+                val dx = o.xs[0] - f.xs[0]
+                val dy = o.ys[0] - f.ys[0]
+                if (dx * dx + dy * dy <= r2) o.slow = 0.25f
+            }
+        }
 
         for (i in 0 until n) {
             val s = snakes[i]
@@ -279,7 +294,7 @@ class World(
 
     private fun respawnBot(s: Snake) {
         findSpawn(600f)
-        s.place(tmp[0], tmp[1], rnd.nextFloat() * TWO_PI - PI_F, 10f + rnd.nextFloat() * 25f)
+        s.place(tmp[0], tmp[1], rnd.nextFloat() * TWO_PI - PI_F, Cfg.START_MASS)
         s.grace = Cfg.SPAWN_GRACE
         s.thinkTimer = 0f
     }

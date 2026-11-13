@@ -58,7 +58,6 @@ import com.ncorti.kotlin.template.app.AppState
 import com.ncorti.kotlin.template.app.Screen
 import com.ncorti.kotlin.template.app.game.Challenge
 import com.ncorti.kotlin.template.app.game.Challenges
-import com.ncorti.kotlin.template.app.game.Powers
 import com.ncorti.kotlin.template.app.game.Skins
 import kotlin.math.cos
 import kotlin.math.sin
@@ -366,7 +365,6 @@ private fun DailyCard(app: AppState) {
 private fun SnakeBar(app: AppState) {
     val s = app.settings
     val skin = Skins.byId(s.selectedSkin)
-    val owned = s.count(Powers.HEADSTART.id)
     val wiggle = rememberInfiniteTransition(label = "wiggle")
     val phase by wiggle.animateFloat(
         0f, 6.2831855f,
@@ -395,23 +393,6 @@ private fun SnakeBar(app: AppState) {
                 Text("EDIT SNAKE", color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 14.sp)
                 Text(skin.name, color = Neon.Dim, fontSize = 11.sp)
             }
-        }
-        val armed = app.headStartArmed
-        val label = if (owned > 0) "START BIG ×$owned" else "START BIG"
-        val fg = if (armed) Color(0xFF14002B) else if (owned > 0) Neon.Lime else Neon.Dim
-        Row(
-            Modifier
-                .padding(end = 8.dp)
-                .bounceClick { if (owned > 0) app.headStartArmed = !armed else app.open(Screen.SHOP) }
-                .clip(RoundedCornerShape(12.dp))
-                .background(if (armed) Neon.Lime else Color.Transparent)
-                .border(2.dp, if (owned > 0) Neon.Lime else Neon.Dim, RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Ico(Ico.CHEVRONS, 14.dp, fg)
-            Text(label, color = fg, fontWeight = FontWeight.Black, fontSize = 12.sp)
         }
     }
 }

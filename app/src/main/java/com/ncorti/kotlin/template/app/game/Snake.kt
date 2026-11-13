@@ -24,6 +24,10 @@ class Snake(val id: Int, val isPlayer: Boolean, val name: String) {
     var shield = 0f
     var magnet = 0f
     var overdrive = 0f
+    /** Freeze power: rivals within [Cfg.FREEZE_RADIUS] get slowed. */
+    var freeze = 0f
+    /** Seconds of slowdown left (refreshed by a nearby freezer). */
+    var slow = 0f
     var alive = false
     var grace = 0f
     var turnMul = 1f
@@ -74,6 +78,8 @@ class Snake(val id: Int, val isPlayer: Boolean, val name: String) {
         shield = 0f
         magnet = 0f
         overdrive = 0f
+        freeze = 0f
+        slow = 0f
     }
 
     fun step(dt: Float, world: World) {
@@ -87,12 +93,14 @@ class Snake(val id: Int, val isPlayer: Boolean, val name: String) {
         if (shield > 0f) shield = max(0f, shield - dt)
         if (magnet > 0f) magnet = max(0f, magnet - dt)
         if (overdrive > 0f) overdrive = max(0f, overdrive - dt)
+        if (freeze > 0f) freeze = max(0f, freeze - dt)
+        if (slow > 0f) slow = max(0f, slow - dt)
 
         // Boost runs on its own energy bar: it never burns length or drops pellets. After running
         // dry it needs a little energy back before it can start again.
         val wantBoost = boosting || overdrive > 0f
         boostActive = wantBoost && (overdrive > 0f || energy > (if (boostActive) 0f else Cfg.BOOST_MIN_START))
-        val speed = if (boostActive) Cfg.BOOST_SPEED else Cfg.BASE_SPEED
+        val speed = (if (boostActive) Cfg.BOOST_SPEED else Cfg.BASE_SPEED) * (if (slow > 0f) Cfg.FREEZE_SLOW else 1f)
         if (boostActive) {
             if (overdrive <= 0f) energy = max(0f, energy - Cfg.BOOST_DRAIN * dt)
         } else {

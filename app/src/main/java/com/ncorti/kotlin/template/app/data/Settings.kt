@@ -31,8 +31,8 @@ class Settings(context: Context) {
     var unlocked by mutableStateOf(parseSet(sp.getString("unlocked", "0,1")))
         private set
 
-    /** Owned consumable powers by id. */
-    var powers by mutableStateOf(Powers.all.associate { it.id to sp.getInt("power_${it.id}", 0) })
+    /** Permanent power levels by id (0 = locked). */
+    var powers by mutableStateOf(Powers.all.associate { it.id to sp.getInt("plevel_${it.id}", 0) })
         private set
     /** Permanent boost-tank upgrade level, 0..Powers.TANK_MAX. */
     var tankLevel by mutableIntStateOf(sp.getInt("tank", 0))
@@ -144,22 +144,18 @@ class Settings(context: Context) {
         return true
     }
 
-    fun count(id: String): Int = powers[id] ?: 0
+    /** Level of a permanent power: 0 = locked, 1..Powers.MAX_LEVEL. */
+    fun powerLevel(id: String): Int = powers[id] ?: 0
 
-    fun buyPower(p: Power): Boolean {
-        if (coins < p.cost || count(p.id) >= Powers.MAX_STOCK) return false
-        coins -= p.cost
-        powers = powers + (p.id to count(p.id) + 1)
-        sp.edit().putInt("coins", coins).putInt("power_${p.id}", count(p.id)).apply()
-        return true
-    }
-
-    /** Uses up one owned power. Returns false if none are left. */
-    fun consumePower(id: String): Boolean {
-        val c = count(id)
-        if (c <= 0) return false
-        powers = powers + (id to c - 1)
-        sp.edit().putInt("power_$id", c - 1).apply()
+    /** Unlocks the power (level 0 -> 1) or upgrades it one level. False if maxed or unaffordable. */
+    fun upgradePower(p: Power): Boolean {
+        val level = powerLevel(p.id)
+        if (level >= Powers.MAX_LEVEL) return false
+        val cost = p.costFor(level)
+        if (coins < cost) return false
+        coins -= cost
+        powers = powers + (p.id to level + 1)
+        sp.edit().putInt("coins", coins).putInt("plevel_${p.id}", level + 1).apply()
         return true
     }
 

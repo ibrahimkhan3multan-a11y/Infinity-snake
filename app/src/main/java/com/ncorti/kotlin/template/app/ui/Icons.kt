@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.Dp
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class Ico { SHIELD, MAGNET, BOLT, COIN, BAG, SNAKE, PLAY, CROWN, TROPHY, TARGET, CHEVRONS, STAR }
+enum class Ico { SHIELD, MAGNET, BOLT, COIN, BAG, SNAKE, PLAY, CROWN, TROPHY, TARGET, CHEVRONS, STAR, SNOW, REFILL, LOCK }
 
 /** Small vector icons drawn with Canvas, so the whole UI shares one crisp, tintable icon set. */
 @Composable
@@ -117,6 +117,31 @@ fun DrawScope.drawIco(kind: Ico, tint: Color) {
             drawPath(p, tint)
             drawRect(tint.copy(alpha = 0.7f), Offset(0.08f * w, 0.84f * h), Size(0.84f * w, 0.1f * h))
         }
+        Ico.SNOW -> {
+            for (k in 0 until 3) {
+                val a = (k * 60f) * (Math.PI.toFloat() / 180f)
+                val dx = kotlin.math.cos(a) * 0.42f * w
+                val dy = kotlin.math.sin(a) * 0.42f * h
+                drawLine(tint, Offset(0.5f * w - dx, 0.5f * h - dy), Offset(0.5f * w + dx, 0.5f * h + dy), sw, StrokeCap.Round)
+            }
+            drawCircle(tint, w * 0.09f, Offset(0.5f * w, 0.5f * h))
+        }
+        Ico.REFILL -> {
+            drawArc(tint, 40f, 280f, false, topLeft = Offset(0.14f * w, 0.14f * h), size = Size(0.72f * w, 0.72f * h), style = Stroke(sw * 1.3f, cap = StrokeCap.Round))
+            val p = Path().apply {
+                moveTo(0.86f * w, 0.12f * h); lineTo(0.88f * w, 0.42f * h); lineTo(0.6f * w, 0.34f * h); close()
+            }
+            drawPath(p, tint)
+            val b = Path().apply {
+                moveTo(0.54f * w, 0.28f * h); lineTo(0.34f * w, 0.54f * h); lineTo(0.48f * w, 0.54f * h)
+                lineTo(0.44f * w, 0.74f * h); lineTo(0.66f * w, 0.46f * h); lineTo(0.52f * w, 0.46f * h); close()
+            }
+            drawPath(b, tint)
+        }
+        Ico.LOCK -> {
+            drawRoundRect(tint, Offset(0.2f * w, 0.45f * h), Size(0.6f * w, 0.48f * h), CornerRadius(w * 0.08f))
+            drawArc(tint, 180f, 180f, false, topLeft = Offset(0.3f * w, 0.1f * h), size = Size(0.4f * w, 0.7f * h), style = Stroke(sw * 1.4f))
+        }
         Ico.TROPHY -> {
             val cup = Path().apply {
                 moveTo(0.26f * w, 0.08f * h)
@@ -168,5 +193,7 @@ fun powerIcon(id: String): Ico = when (id) {
     "shield" -> Ico.SHIELD
     "magnet" -> Ico.MAGNET
     "over" -> Ico.BOLT
+    "freeze" -> Ico.SNOW
+    "recharge" -> Ico.REFILL
     else -> Ico.CHEVRONS
 }
