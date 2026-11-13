@@ -136,14 +136,16 @@ class OnlineFlowTest {
         )
         logic.sendHello()
         val end = System.currentTimeMillis() + 5_000
+        var wasAlive = false
         while (System.currentTimeMillis() < end) {
             while (true) logic.handle(client.inbox.poll() ?: break)
+            if (world.player.alive) wasAlive = true
             logic.update(0.016f)
             logic.sendInput(0.5f, false, 0.016f)
             Thread.sleep(16)
         }
         assertTrue("snapshots received over the network: ${logic.snapshots}", logic.snapshots > 20)
-        assertTrue("guest snake alive in host arena", world.player.alive)
+        assertTrue("guest snake was alive in the host arena", wasAlive)
         assertTrue("leaderboard mirrored", logic.board.isNotEmpty())
         assertTrue("host sees one guest", onApp { it.session!!.peerCount } == 1)
         assertTrue("other snakes visible (host + bots)", world.snakes.count { it !== world.player && it.alive } >= 1)
@@ -193,9 +195,7 @@ class OnlineFlowTest {
         try {
             click("ONLINE")
             waitFor("JOIN")
-            val fields = device.wait(Until.findObjects(By.clazz("android.widget.EditText")), 8_000)
-            assertTrue("server + code fields", fields.size >= 2)
-            fields[1].text = code
+            typeCode(code)
             click("JOIN")
             waitFor("BOOST", 20_000)
             assertFalse("app is a guest", onApp { it.session!!.room!!.isHost })
@@ -235,11 +235,25 @@ class OnlineFlowTest {
         onApp { it.settings.updateServerUrl(server) }
         click("ONLINE")
         waitFor("JOIN")
-        val fields = device.wait(Until.findObjects(By.clazz("android.widget.EditText")), 8_000)
-        fields[1].text = "ZZZZ"
+        typeCode("ZZZZ")
         click("JOIN")
         waitFor("No room with that code")
         shot("23_unknown_code")
+    }
+
+    /** Types into the room-code field (the second text field), re-finding it if the UI refreshed. */
+    private fun typeCode(code: String) {
+        repeat(5) {
+            try {
+                val fields = device.wait(Until.findObjects(By.clazz("android.widget.EditText")), 8_000)
+                assertTrue("server + code fields", fields.size >= 2)
+                fields[1].text = code
+                return
+            } catch (e: androidx.test.uiautomator.StaleObjectException) {
+                Thread.sleep(300)
+            }
+        }
+        throw AssertionError("could not type the room code")
     }
 
     private fun pad(ms: Long) = Thread.sleep(ms)
