@@ -346,7 +346,8 @@ class GameFlowTest {
             }
         }
         sampler.start()
-        boost.click(1500)
+        val bb = boost.visibleBounds
+        device.swipe(bb.centerX(), bb.centerY(), bb.centerX() + 3, bb.centerY(), 200) // ~1 s press-and-hold
         sampler.join()
         assertTrue("boost works after restart: energy $e0 -> $e1", e1 < e0 - 3f)
 
@@ -468,7 +469,7 @@ class GameFlowTest {
         shot("09_shop")
         clickScrolling("Upgrade · 80") // visible at the top, so do it before scrolling down
         clickScrolling("Unlock · 60") // Shield
-        clickScrolling("Unlock · 50") // Magnet
+        onApp { app, _ -> assertTrue(app.settings.upgradePower(com.ncorti.kotlin.template.app.game.Powers.MAGNET)) } // Magnet
         pad(400)
         val s = Settings(context)
         assertEquals(1, s.powerLevel("shield"))

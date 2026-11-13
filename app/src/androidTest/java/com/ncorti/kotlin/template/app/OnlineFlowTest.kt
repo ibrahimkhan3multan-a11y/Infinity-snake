@@ -210,19 +210,19 @@ class OnlineFlowTest {
                 if (!ready) Thread.sleep(200)
             }
             assertTrue("guest app shows the host's arena", ready)
-            assertTrue("host arena has the app's player", hostWorld.snakes.any { it.remote && it.name.isNotEmpty() })
+            assertTrue("host arena has the app's player", retry { hostWorld.snakes.any { it.remote && it.name.isNotEmpty() } })
             shot("22_guest_in_room")
 
             // Steering from the app reaches the host's copy of this snake.
             onApp { it.session!!.input.angle = 1.2f }
             Thread.sleep(1500)
-            val remote = hostWorld.snakes.first { it.remote }
+            val remote = retry { hostWorld.snakes.first { it.remote } }
             assertTrue("host snake follows the app's steering: ${remote.angle}", kotlin.math.abs(remote.angle - 1.2f) < 0.5f)
 
             // Leaving closes the connection; the host sees the guest go.
             onApp { it.toMenu() }
             Thread.sleep(1500)
-            assertTrue("host dropped the guest", hostWorld.snakes.none { it.remote })
+            assertTrue("host dropped the guest", retry { hostWorld.snakes.none { it.remote } })
         } finally {
             running = false
             loop.join(2000)
@@ -243,4 +243,16 @@ class OnlineFlowTest {
     }
 
     private fun pad(ms: Long) = Thread.sleep(ms)
+
+    /** The test reads a world that another thread is stepping; retry if its list changes mid-read. */
+    private fun <T> retry(block: () -> T): T {
+        repeat(10) {
+            try {
+                return block()
+            } catch (e: ConcurrentModificationException) {
+                Thread.sleep(10)
+            }
+        }
+        return block()
+    }
 }
