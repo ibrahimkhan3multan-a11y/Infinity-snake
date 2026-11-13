@@ -170,11 +170,11 @@ class OnlineFlowTest {
         hostWorld.listener = object : WorldListener {
             override fun onSnakeDied(snake: Snake, killer: Snake?) = host.snakeDied(snake, killer)
         }
-        @Volatile var running = true
+        val running = java.util.concurrent.atomic.AtomicBoolean(true)
         val loop = Thread {
             var last = System.nanoTime()
             var acc = 0f
-            while (running) {
+            while (running.get()) {
                 val now = System.nanoTime()
                 val dt = ((now - last) / 1e9f).coerceAtMost(0.1f)
                 last = now
@@ -224,7 +224,7 @@ class OnlineFlowTest {
             Thread.sleep(1500)
             assertTrue("host dropped the guest", retry { hostWorld.snakes.none { it.remote } })
         } finally {
-            running = false
+            running.set(false)
             loop.join(2000)
             hostClient.close()
         }
