@@ -24,6 +24,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Setup Node (relay server tests)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Relay server tests
+        run: cd server && npm test
+
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
@@ -60,6 +68,17 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Node (relay server)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Start relay server for the online tests
+        run: |
+          nohup node server/relay.js > relay.log 2>&1 &
+          sleep 2
+          curl -sf http://127.0.0.1:8080/health
 
       - name: Enable KVM
         run: |
