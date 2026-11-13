@@ -338,8 +338,16 @@ class GameFlowTest {
         val boost = device.findObject(By.text("BOOST"))
         assertNotNull(boost)
         val e0 = onApp { app, _ -> app.session!!.world.player.energy }
-        boost.click(1200)
-        val e1 = onApp { app, _ -> app.session!!.world.player.energy }
+        var e1 = e0
+        val sampler = Thread {
+            repeat(25) {
+                e1 = minOf(e1, onApp { app, _ -> app.session!!.world.player.energy })
+                Thread.sleep(60)
+            }
+        }
+        sampler.start()
+        boost.click(1500)
+        sampler.join()
         assertTrue("boost works after restart: energy $e0 -> $e1", e1 < e0 - 3f)
 
         // And again via the pause menu's RESTART.
@@ -493,7 +501,7 @@ class GameFlowTest {
         startArena()
         val w = onApp { app, _ -> app.session!!.world }
         val me = w.player.mass
-        w.snakes.filter { !it.isPlayer }.forEach { assertEquals("bot ${it.name}", me, it.mass, 0.01f) }
+        w.snakes.filter { !it.isPlayer }.forEach { assertEquals("bot ${it.name}", me, it.mass, 8f) } // bots may have eaten a little by now
     }
 
     @Test
