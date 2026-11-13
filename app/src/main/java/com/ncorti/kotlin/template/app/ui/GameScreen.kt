@@ -385,7 +385,7 @@ private fun StatsPanel(session: GameSession) {
                 pop = false
             }
             val popScale by animateFloatAsState(
-                if (pop) 1.3f else 1f,
+                if (pop) 1.15f else 1f,
                 spring(dampingRatio = Spring.DampingRatioMediumBouncy),
                 label = "pop",
             )
@@ -394,7 +394,7 @@ private fun StatsPanel(session: GameSession) {
                 color = Neon.Text,
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Black,
-                modifier = Modifier.graphicsLayer {
+                modifier = Modifier.padding(end = 6.dp).graphicsLayer {
                     scaleX = popScale
                     scaleY = popScale
                     transformOrigin = TransformOrigin(0f, 1f)
