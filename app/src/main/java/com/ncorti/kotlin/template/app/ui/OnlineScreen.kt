@@ -47,31 +47,37 @@ fun OnlineScreen(app: AppState) {
     DisposableEffect(Unit) { onDispose { app.cancelOnline() } }
 
     ScreenFrame("Play Online", onBack = { app.cancelOnline(); app.back() }) {
-        Text(
-            "Rooms run on the host's phone. A small relay server passes room codes and messages between " +
-                "phones. Online play is the only part of the game that uses the internet.",
-            color = Neon.Dim,
-            fontSize = 12.sp,
-        )
-        Panel {
-            Text("SERVER ADDRESS", color = Neon.Dim, fontSize = 11.sp, letterSpacing = 1.sp)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             OutlinedTextField(
                 value = s.serverUrl,
                 onValueChange = { s.updateServerUrl(it) },
                 singleLine = true,
-                placeholder = { Text("e.g. my-relay.onrender.com or 192.168.1.20:8080") },
+                label = { Text("Server address") },
+                placeholder = { Text("my-relay.onrender.com or 192.168.1.20:8080") },
                 colors = fieldColors(),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
             )
+            Text("Bots", color = Neon.Text, fontWeight = FontWeight.SemiBold)
+            Switch(checked = withBots, onCheckedChange = { withBots = it })
         }
+        Text(
+            app.onlineStatus.ifEmpty { "Rooms run on the host's phone; the server only passes codes and messages." },
+            color = when {
+                app.onlineBusy -> Neon.Cyan
+                app.onlineStatus.isNotEmpty() -> Neon.Pink
+                else -> Neon.Dim
+            },
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+        )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Panel(Modifier.weight(1f)) {
                 Text("PLAY WITH FRIENDS", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
-                Text("Create a private room and share the 4-letter code.", color = Neon.Dim, fontSize = 12.sp)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Add ${Cfg.ONLINE_BOTS} bots", color = Neon.Text, modifier = Modifier.weight(1f))
-                    Switch(checked = withBots, onCheckedChange = { withBots = it })
-                }
+                Text("Private room. Share the 4-letter code.", color = Neon.Dim, fontSize = 12.sp)
                 NeonButton(
                     "CREATE ROOM",
                     { app.connectOnline("host", bots = if (withBots) Cfg.ONLINE_BOTS else 0) },
@@ -98,25 +104,18 @@ fun OnlineScreen(app: AppState) {
                 )
             }
             Panel(Modifier.weight(1f)) {
-                Text("QUICK MATCH", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
-                Text("Jump into an open public room, or start one for others to find.", color = Neon.Dim, fontSize = 12.sp)
+                Text("PLAY WITH ANYONE", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
+                Text("Open public room, or start one.", color = Neon.Dim, fontSize = 12.sp)
                 NeonButton(
                     "QUICK MATCH",
-                    { app.connectOnline("quick", bots = Cfg.ONLINE_BOTS) },
+                    { app.connectOnline("quick", bots = if (withBots) Cfg.ONLINE_BOTS else 0) },
                     Modifier.fillMaxWidth().height(48.dp),
                     accent = Neon.Pink,
                 )
             }
         }
-        if (app.onlineStatus.isNotEmpty()) {
-            Text(
-                app.onlineStatus,
-                color = if (app.onlineBusy) Neon.Cyan else Neon.Pink,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
         Text(
-            "No server yet? The relay is in the project's server/ folder and has a short setup guide (README).",
+            "Online is the only part of the game that uses the internet. No server yet? See server/README.md in the project.",
             color = Neon.Dim,
             fontSize = 11.sp,
         )
