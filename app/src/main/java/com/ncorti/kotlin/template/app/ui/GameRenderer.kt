@@ -2,6 +2,7 @@ package com.ncorti.kotlin.template.app.ui
 
 import android.graphics.Paint
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -23,6 +24,10 @@ class GameRenderer {
         textAlign = Paint.Align.CENTER
     }
 
+    private var vignette: Brush? = null
+    private var vigW = 0f
+    private var vigH = 0f
+
     private val arenaColor = Color(0xFF110B22)
     private val outsideColor = Color(0xFF05030B)
     private val gridColor = Color(0xFF241A3F)
@@ -35,8 +40,8 @@ class GameRenderer {
             s.viewW = w
             s.viewH = h
             val zoom = s.zoom
-            val ox = w / 2f - s.camX * zoom
-            val oy = h / 2f - s.camY * zoom
+            val ox = w / 2f - (s.camX + s.shakeX) * zoom
+            val oy = h / 2f - (s.camY + s.shakeY) * zoom
             val world = s.world
             val time = world.time
 
@@ -94,7 +99,7 @@ class GameRenderer {
                 if (x < -m || x > w + m || y < -m || y > h + m) continue
                 val v = world.fv[i]
                 var rad = foodRadius(v) * zoom
-                if (quality >= 2) rad *= 1f + 0.12f * sin(time * 4f + i)
+                if (quality >= 1) rad *= 1f + 0.12f * sin(time * 4f + i)
                 val col = Color(world.fcol[i])
                 if (quality >= 1) drawCircle(col.copy(alpha = 0.22f), rad * 2.3f, Offset(x, y))
                 drawCircle(col, rad, Offset(x, y))
@@ -174,6 +179,20 @@ class GameRenderer {
                 if (x < -m || x > w + m || y < -m || y > h + m) continue
                 val f = (life / p.maxLife[i]).coerceIn(0f, 1f)
                 drawCircle(Color(p.color[i]).copy(alpha = f), p.size[i] * zoom * (0.4f + 0.6f * f), Offset(x, y))
+            }
+
+            // Soft vignette pulls the eye to the middle of the screen.
+            if (quality >= 1) {
+                if (vignette == null || vigW != w || vigH != h) {
+                    vignette = Brush.radialGradient(
+                        colorStops = arrayOf(0.5f to Color.Transparent, 1f to Color(0xAA000000)),
+                        center = Offset(w / 2f, h / 2f),
+                        radius = kotlin.math.hypot(w, h) / 2f,
+                    )
+                    vigW = w
+                    vigH = h
+                }
+                drawRect(vignette!!)
             }
         }
     }

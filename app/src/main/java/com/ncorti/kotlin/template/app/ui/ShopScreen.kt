@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ncorti.kotlin.template.app.AppState
+import com.ncorti.kotlin.template.app.audio.Sfx
 import com.ncorti.kotlin.template.app.game.Power
 import com.ncorti.kotlin.template.app.game.Powers
 
@@ -54,9 +55,13 @@ private fun ShopCard(content: @Composable RowScope.() -> Unit) {
 private fun TankCard(app: AppState) {
     val s = app.settings
     val level = s.tankLevel
+    val audio = LocalAudio.current
     ShopCard {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text("Boost Tank", color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 17.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Ico(Ico.BOLT, 20.dp, Neon.Lime)
+                Text("Boost Tank", color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 17.sp)
+            }
             Text(
                 "Boost runs on energy, never on your length. A bigger tank means a longer boost.",
                 color = Neon.Dim,
@@ -75,7 +80,7 @@ private fun TankCard(app: AppState) {
             val cost = Powers.tankCost(level)
             NeonButton(
                 "Upgrade · $cost",
-                { s.upgradeTank() },
+                { if (s.upgradeTank()) audio.play(Sfx.COIN) else audio.play(Sfx.DENIED) },
                 Modifier.width(190.dp),
                 primary = s.coins >= cost,
                 accent = Neon.Pink,
@@ -87,15 +92,19 @@ private fun TankCard(app: AppState) {
 @Composable
 private fun PowerCard(app: AppState, power: Power) {
     val s = app.settings
+    val audio = LocalAudio.current
     ShopCard {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(power.name, color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 17.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Ico(powerIcon(power.id), 20.dp, Neon.Cyan)
+                Text(power.name, color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 17.sp)
+            }
             Text(power.desc, color = Neon.Dim, fontSize = 12.sp)
             Text("Owned: ${s.count(power.id)}", color = Neon.Cyan, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
         NeonButton(
             "Buy · ${power.cost}",
-            { s.buyPower(power) },
+            { if (s.buyPower(power)) audio.play(Sfx.COIN) else audio.play(Sfx.DENIED) },
             Modifier.width(160.dp),
             primary = s.coins >= power.cost,
             accent = Neon.Pink,

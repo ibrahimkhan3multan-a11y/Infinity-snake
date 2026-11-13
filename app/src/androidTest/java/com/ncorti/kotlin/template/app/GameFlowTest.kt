@@ -132,6 +132,20 @@ class GameFlowTest {
     // ---------------------------------------------------------------- tests
 
     @Test
+    fun everySoundAndMusicModeRunsWithoutCrashing() {
+        val audio = com.ncorti.kotlin.template.app.audio.AudioEngine()
+        try {
+            com.ncorti.kotlin.template.app.audio.Sfx.values().forEach { audio.play(it); pad(30) }
+            audio.musicMode = com.ncorti.kotlin.template.app.audio.MusicMode.MENU
+            pad(200)
+            audio.musicMode = com.ncorti.kotlin.template.app.audio.MusicMode.GAME
+            pad(200)
+        } finally {
+            audio.release()
+        }
+    }
+
+    @Test
     fun firstLaunchShowsFullMenuInLandscape() {
         for (label in listOf("PLAY", "ARENA", "SOLO", "SHOP", "SKINS", "HELP", "BEST SCORE", "BEST RANK", "EDIT SNAKE")) {
             waitFor(label)
@@ -460,13 +474,13 @@ class GameFlowTest {
         val maxE = onApp { app, _ -> app.session!!.world.player.maxEnergy }
         assertEquals("tank upgrade applied", 125f, maxE, 0.01f)
         onApp { app, _ -> app.session!!.world.player.grace = 0f }
-        waitFor("SHIELD")
+        assertTrue("shield button", device.wait(Until.hasObject(By.desc("SHIELD")), 15_000))
         shot("10_power_buttons")
-        click("SHIELD")
+        device.findObject(By.desc("SHIELD")).click()
         pad(400)
         assertTrue("shield active", onApp { app, _ -> app.session!!.world.player.shield } > 0f)
         assertEquals("shield consumed", 0, Settings(context).count("shield"))
-        click("MAGNET")
+        device.findObject(By.desc("MAGNET")).click()
         pad(400)
         assertTrue("magnet active", onApp { app, _ -> app.session!!.world.player.magnet } > 0f)
         shot("11_powers_active")

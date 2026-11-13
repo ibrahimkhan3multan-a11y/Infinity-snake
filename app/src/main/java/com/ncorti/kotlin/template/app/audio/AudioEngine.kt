@@ -11,12 +11,32 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import kotlin.math.PI
 import kotlin.math.exp
+import kotlin.math.min
 import kotlin.math.sin
 import kotlin.random.Random
 
+/** Every sound effect in the game. All of them are synthesized in code (no audio files). */
+enum class Sfx(val volume: Float, val minGapMs: Long) {
+    CLICK(0.45f, 40),
+    EAT(0.5f, 90),
+    BOOM(0.9f, 200),
+    KILL(0.7f, 150),
+    BOOST(0.5f, 350),
+    SHIELD(0.6f, 200),
+    MAGNET(0.6f, 200),
+    OVERDRIVE(0.6f, 200),
+    COIN(0.6f, 120),
+    FANFARE(0.75f, 500),
+    START(0.6f, 300),
+    WARN(0.5f, 800),
+    DENIED(0.5f, 150),
+}
+
+enum class MusicMode { MENU, GAME }
+
 /**
- * All sound is synthesized in code (no audio files), so the app stays tiny and fully offline.
- * Every call is wrapped so an audio failure can never crash the game.
+ * Sound and music, generated at runtime so the app stays tiny and fully offline. Every call is
+ * wrapped so an audio failure can never crash the game.
  */
 class AudioEngine {
     var soundEnabled = true
@@ -30,86 +50,94 @@ class AudioEngine {
             field = value
             syncMusic()
         }
+    var musicMode = MusicMode.MENU
+        set(value) {
+            if (field != value) {
+                field = value
+                syncMusic()
+            }
+        }
 
-    private var music: AudioTrack? = null
-    private var musicBuilding = false
-    private var pop: AudioTrack? = null
-    private var boom: AudioTrack? = null
-    private var lastPop = 0L
+    private val music = arrayOfNulls<AudioTrack>(2)
+    private val musicBuilding = BooleanArray(2)
+    private val sfxTracks = HashMap<Sfx, AudioTrack?>()
+    private val lastPlayed = HashMap<Sfx, Long>()
+
+    // ------------------------------------------------------------------ music
 
     private fun syncMusic() {
         try {
-            if (musicEnabled && foreground) {
-                if (music == null) {
-                    buildMusicAsync()
-                } else {
-                    music?.setVolume(0.35f)
-                    music?.play()
+            val want = musicMode.ordinal
+            for (i in 0..1) {
+                val t = music[i]
+                if (i != want || !musicEnabled || !foreground) {
+                    if (t != null && t.playState == AudioTrack.PLAYSTATE_PLAYING) t.pause()
                 }
-            } else {
-                music?.pause()
+            }
+            if (musicEnabled && foreground) {
+                val t = music[want]
+                if (t == null) {
+                    buildMusicAsync(want)
+                } else {
+                    t.setVolume(if (want == 0) 0.30f else 0.34f)
+                    t.play()
+                }
             }
         } catch (e: IllegalStateException) {
-            music = null
+            music[musicMode.ordinal] = null
         }
     }
 
-    private fun buildMusicAsync() {
-        if (musicBuilding) return
-        musicBuilding = true
+    private fun buildMusicAsync(slot: Int) {
+        if (musicBuilding[slot]) return
+        musicBuilding[slot] = true
         Thread {
-            val track = makeStatic(genMusic(), loop = true)
-            music = track
-            musicBuilding = false
-            if (musicEnabled && foreground) {
+            val track = makeStatic(if (slot == 0) genMenuMusic() else genGameMusic(), loop = true)
+            music[slot] = track
+            musicBuilding[slot] = false
+            if (musicEnabled && foreground && musicMode.ordinal == slot) {
                 try {
-                    track?.setVolume(0.35f)
+                    track?.setVolume(if (slot == 0) 0.30f else 0.34f)
                     track?.play()
                 } catch (e: IllegalStateException) {
-                    music = null
+                    music[slot] = null
                 }
             }
         }.start()
     }
 
-    fun playEat() {
+    // ------------------------------------------------------------------ effects
+
+    fun play(sfx: Sfx) {
         if (!soundEnabled || !foreground) return
         val now = SystemClock.uptimeMillis()
-        if (now - lastPop < 90) return
-        lastPop = now
-        if (pop == null) pop = makeStatic(genPop(), loop = false)
-        restart(pop, 0.5f)
-    }
-
-    fun playBoom() {
-        if (!soundEnabled || !foreground) return
-        if (boom == null) boom = makeStatic(genBoom(), loop = false)
-        restart(boom, 0.9f)
-    }
-
-    private fun restart(t: AudioTrack?, volume: Float) {
+        val last = lastPlayed[sfx] ?: 0L
+        if (now - last < sfx.minGapMs) return
+        lastPlayed[sfx] = now
+        val track = sfxTracks.getOrPut(sfx) { makeStatic(generate(sfx), loop = false) }
         try {
-            t ?: return
-            t.stop()
-            t.reloadStaticData()
-            t.setVolume(volume)
-            t.play()
+            track ?: return
+            track.stop()
+            track.reloadStaticData()
+            track.setVolume(sfx.volume)
+            track.play()
         } catch (e: IllegalStateException) {
-            // Ignore: sound effects are best effort.
+            sfxTracks[sfx] = null
         }
     }
+
+    fun playEat() = play(Sfx.EAT)
+    fun playBoom() = play(Sfx.BOOM)
 
     fun release() {
         try {
-            music?.release()
-            pop?.release()
-            boom?.release()
+            for (t in music) t?.release()
+            for (t in sfxTracks.values) t?.release()
         } catch (e: IllegalStateException) {
             // Ignore.
         }
-        music = null
-        pop = null
-        boom = null
+        for (i in 0..1) music[i] = null
+        sfxTracks.clear()
     }
 
     private fun makeStatic(samples: ShortArray, loop: Boolean): AudioTrack? = try {
@@ -139,35 +167,112 @@ class AudioEngine {
         null
     }
 
-    private fun genPop(): ShortArray {
-        val n = RATE * 60 / 1000
+    // ------------------------------------------------------------------ synthesis
+
+    /** Renders [ms] milliseconds of f(t seconds, p progress 0..1) in -1..1, with click-free edges. */
+    private fun synth(ms: Int, vol: Double, f: (Double, Double) -> Double): ShortArray {
+        val n = RATE * ms / 1000
         val out = ShortArray(n)
-        var phase = 0.0
         for (i in 0 until n) {
-            val t = i.toDouble() / n
-            phase += 2 * PI * (600 + 500 * t) / RATE
-            out[i] = (sin(phase) * exp(-4 * t) * 9000).toInt().toShort()
+            val t = i.toDouble() / RATE
+            val p = i.toDouble() / n
+            val attack = min(1.0, i / (RATE * 0.004))
+            val release = min(1.0, (n - i) / (RATE * 0.012))
+            val v = f(t, p) * attack * release * vol
+            out[i] = (v * 32767).toInt().coerceIn(-32767, 32767).toShort()
         }
         return out
     }
 
-    private fun genBoom(): ShortArray {
-        val n = RATE * 450 / 1000
-        val out = ShortArray(n)
-        val rnd = Random(5)
-        var phase = 0.0
-        var lp = 0.0
-        for (i in 0 until n) {
-            val t = i.toDouble() / n
-            phase += 2 * PI * (130 - 90 * t) / RATE
-            lp += 0.15 * ((rnd.nextDouble() * 2 - 1) - lp)
-            out[i] = ((sin(phase) * 0.7 + lp * 0.9) * exp(-5 * t) * 14000).toInt().toShort()
+    private fun tau(x: Double) = 2 * PI * x
+
+    private fun generate(sfx: Sfx): ShortArray {
+        val rnd = Random(sfx.ordinal + 11)
+        return when (sfx) {
+            Sfx.CLICK -> synth(45, 0.35) { t, p -> sin(tau(1000 * t)) * exp(-5 * p) }
+            Sfx.EAT -> {
+                var ph = 0.0
+                synth(70, 0.3) { _, p ->
+                    ph += tau(600 + 500 * p) / RATE
+                    sin(ph) * exp(-4 * p)
+                }
+            }
+            Sfx.BOOM -> {
+                var ph = 0.0
+                var lp = 0.0
+                synth(450, 0.45) { _, p ->
+                    ph += tau(130 - 90 * p) / RATE
+                    lp += 0.15 * ((rnd.nextDouble() * 2 - 1) - lp)
+                    (sin(ph) * 0.7 + lp * 0.9) * exp(-5 * p)
+                }
+            }
+            Sfx.KILL -> synth(300, 0.4) { t, p ->
+                val seg = (p * 3).toInt().coerceAtMost(2)
+                val lp = p * 3 - seg
+                val f = doubleArrayOf(659.0, 880.0, 1175.0)[seg]
+                (sin(tau(f * t)) + 0.3 * sin(tau(2 * f * t))) * exp(-3.5 * lp)
+            }
+            Sfx.BOOST -> {
+                var lp = 0.0
+                var ph = 0.0
+                synth(280, 0.5) { _, p ->
+                    lp += (0.04 + 0.5 * p) * ((rnd.nextDouble() * 2 - 1) - lp)
+                    ph += tau(170 + 700 * p) / RATE
+                    val env = sin(PI * p)
+                    (lp * 0.9 + sin(ph) * 0.3) * env
+                }
+            }
+            Sfx.SHIELD -> synth(480, 0.4) { t, p ->
+                val tr = 0.6 + 0.4 * sin(tau(14 * t))
+                (sin(tau(660 * t)) + 0.6 * sin(tau(990 * t)) + 0.4 * sin(tau(1320 * t))) * 0.5 * tr * exp(-2.5 * p)
+            }
+            Sfx.MAGNET -> synth(400, 0.45) { t, p ->
+                sin(tau(400 * t) + 3.0 * sin(tau(9 * t))) * exp(-3 * p)
+            }
+            Sfx.OVERDRIVE -> {
+                var ph = 0.0
+                synth(480, 0.4) { _, p ->
+                    ph += tau(200 + 1100 * p * p) / RATE
+                    (sin(ph) + 0.4 * sin(2 * ph)) * exp(-1.2 * p)
+                }
+            }
+            Sfx.COIN -> synth(280, 0.4) { t, p ->
+                val first = p < 0.4
+                val f = if (first) 1319.0 else 1760.0
+                val lp = if (first) p / 0.4 else (p - 0.4) / 0.6
+                (sin(tau(f * t)) + 0.35 * sin(tau(2 * f * t))) * exp(-4 * lp)
+            }
+            Sfx.FANFARE -> synth(900, 0.4) { t, _ ->
+                val notes = doubleArrayOf(523.25, 659.25, 783.99, 1046.5)
+                val idx = (t / 0.14).toInt().coerceAtMost(3)
+                val lt = t - idx * 0.14
+                val f = notes[idx]
+                (sin(tau(f * t)) + 0.4 * sin(tau(2 * f * t)) + 0.2 * sin(tau(3 * f * t))) * exp((if (idx == 3) -2.0 else -3.0) * lt)
+            }
+            Sfx.START -> {
+                var ph = 0.0
+                synth(320, 0.4) { _, p ->
+                    ph += tau(300 + 900 * p) / RATE
+                    sin(ph) * sin(PI * p)
+                }
+            }
+            Sfx.WARN -> synth(250, 0.35) { t, _ ->
+                if (t % 0.125 < 0.06) sin(tau(880 * t)) else 0.0
+            }
+            Sfx.DENIED -> {
+                var ph = 0.0
+                synth(150, 0.3) { _, p ->
+                    ph += tau(180 - 60 * p) / RATE
+                    (if (sin(ph) > 0) 1.0 else -1.0) * exp(-3 * p)
+                }
+            }
         }
-        return out
     }
 
-    /** A short synth loop: slow minor-key arpeggio over a soft bass pulse (about 10 seconds). */
-    private fun genMusic(): ShortArray {
+    private fun kick(t: Double) = sin(tau((55 + 95 * exp(-26 * t)) * t)) * exp(-11 * t)
+
+    /** Calm slow arpeggio over a soft bass pulse (about 10 seconds). */
+    private fun genMenuMusic(): ShortArray {
         val chords = arrayOf(
             doubleArrayOf(220.00, 261.63, 329.63), // Am
             doubleArrayOf(174.61, 220.00, 261.63), // F
@@ -185,11 +290,39 @@ class AudioEngine {
             for (i in 0 until noteLen) {
                 val t = i.toDouble() / RATE
                 val env = exp(-5.0 * t)
-                val lead = (sin(2 * PI * f * t) + 0.3 * sin(4 * PI * f * t)) * env * 0.16
+                val lead = (sin(tau(f * t)) + 0.3 * sin(tau(2 * f * t))) * env * 0.16
                 var b = 0.0
-                if (e % 4 == 0) b = sin(2 * PI * bass[chord] * t) * exp(-2.5 * t) * 0.28
-                val idx = e * noteLen + i
-                out[idx] = ((lead + b) * 32767).toInt().coerceIn(-32767, 32767).toShort()
+                if (e % 4 == 0) b = sin(tau(bass[chord] * t)) * exp(-2.5 * t) * 0.28
+                out[e * noteLen + i] = ((lead + b) * 32767).toInt().coerceIn(-32767, 32767).toShort()
+            }
+        }
+        return out
+    }
+
+    /** Faster driving loop for gameplay: arpeggio, bass, kick and hi-hat (about 9.6 seconds). */
+    private fun genGameMusic(): ShortArray {
+        val chords = arrayOf(
+            doubleArrayOf(220.00, 261.63, 329.63),
+            doubleArrayOf(174.61, 220.00, 261.63),
+            doubleArrayOf(261.63, 329.63, 392.00),
+            doubleArrayOf(196.00, 246.94, 293.66),
+        )
+        val bass = doubleArrayOf(55.00, 43.65, 65.41, 49.00)
+        val noteLen = RATE * 15 / 100
+        val notes = 64
+        val out = ShortArray(noteLen * notes)
+        val pattern = intArrayOf(0, 2, 1, 2, 0, 2, 1, 2)
+        val rnd = Random(3)
+        for (e in 0 until notes) {
+            val chord = e / 16
+            val f = chords[chord][pattern[e % 8]] * 2
+            for (i in 0 until noteLen) {
+                val t = i.toDouble() / RATE
+                val lead = (sin(tau(f * t)) + 0.25 * sin(tau(2 * f * t))) * exp(-7.0 * t) * 0.13
+                val bassV = sin(tau(bass[chord] * 2 * t)) * 0.16 * exp(-1.5 * t)
+                val k = if (e % 4 == 0) kick(t) * 0.34 else 0.0
+                val hat = if (e % 2 == 1) (rnd.nextDouble() * 2 - 1) * exp(-70 * t) * 0.07 else 0.0
+                out[e * noteLen + i] = ((lead + bassV + k + hat) * 32767).toInt().coerceIn(-32767, 32767).toShort()
             }
         }
         return out

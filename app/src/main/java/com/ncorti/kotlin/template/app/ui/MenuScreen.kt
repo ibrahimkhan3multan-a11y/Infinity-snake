@@ -1,5 +1,12 @@
 package com.ncorti.kotlin.template.app.ui
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -105,12 +113,30 @@ fun MenuScreen(app: AppState) {
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        SideChip("SHOP", Neon.Pink) { app.open(Screen.SHOP) }
-                        SideChip("SKINS", Neon.Violet) { app.open(Screen.SKINS) }
-                        SideChip("HELP", Neon.Cyan) { app.open(Screen.HOWTO) }
+                        SideChip("SHOP", Neon.Pink, Ico.BAG) { app.open(Screen.SHOP) }
+                        SideChip("SKINS", Neon.Violet, Ico.SNAKE) { app.open(Screen.SKINS) }
+                        SideChip("HELP", Neon.Cyan, null) { app.open(Screen.HOWTO) }
                         Spacer(Modifier.weight(1f))
                         ModeToggle(solo = s.soloMode) { s.updateSoloMode(it) }
-                        NeonButton("PLAY", { app.startGame(s.soloMode) }, Modifier.fillMaxWidth().height(62.dp), accent = Neon.Lime)
+                        val pulse = rememberInfiniteTransition(label = "play")
+                        val playScale by pulse.animateFloat(
+                            1f, 1.045f,
+                            infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+                            label = "playScale",
+                        )
+                        NeonButton(
+                            "PLAY",
+                            { app.startGame(s.soloMode) },
+                            Modifier
+                                .fillMaxWidth()
+                                .height(62.dp)
+                                .graphicsLayer {
+                                    scaleX = playScale
+                                    scaleY = playScale
+                                },
+                            accent = Neon.Lime,
+                            icon = { Ico(Ico.PLAY, 22.dp, Color(0xFF14002B)) },
+                        )
                     }
                 }
             }
@@ -127,11 +153,11 @@ private fun RoundIconButton(description: String, onClick: () -> Unit, icon: @Com
     Box(
         Modifier
             .size(46.dp)
+            .bounceClick(onClick = onClick)
             .clip(CircleShape)
             .background(Neon.Surface)
             .border(1.5.dp, Neon.Violet.copy(alpha = 0.6f), CircleShape)
-            .semantics { contentDescription = description }
-            .clickable(onClick = onClick),
+            .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) { icon() }
 }
@@ -158,11 +184,11 @@ private fun NamePill(app: AppState, onEdit: () -> Unit) {
     val skin = Skins.byId(app.settings.selectedSkin)
     Row(
         Modifier
+            .bounceClick(onClick = onEdit)
             .clip(RoundedCornerShape(23.dp))
             .background(Neon.Surface)
             .border(1.5.dp, Neon.Violet.copy(alpha = 0.6f), RoundedCornerShape(23.dp))
             .semantics { contentDescription = "Edit name" }
-            .clickable(onClick = onEdit)
             .padding(start = 5.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -190,6 +216,7 @@ private fun BestPanel(best: Int, rank: Int) {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Ico(Ico.TROPHY, 28.dp, Color(0xFFFFD45C))
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("BEST SCORE", color = Neon.Dim, fontSize = 9.sp, letterSpacing = 1.sp)
             Text(best.toString(), color = Neon.Cyan, fontSize = 20.sp, fontWeight = FontWeight.Black)
@@ -205,22 +232,31 @@ private fun BestPanel(best: Int, rank: Int) {
 private fun CoinPill(coins: Int, onClick: () -> Unit) {
     Row(
         Modifier
+            .bounceClick(onClick = onClick)
             .clip(RoundedCornerShape(23.dp))
             .background(Neon.Surface)
             .border(1.5.dp, Color(0xFFFFD45C).copy(alpha = 0.7f), RoundedCornerShape(23.dp))
             .semantics { contentDescription = "Coins, open shop" }
-            .clickable(onClick = onClick)
             .padding(start = 6.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Canvas(Modifier.size(30.dp)) {
-            drawCircle(Color(0xFFFFB300), size.width / 2f)
-            drawCircle(Color(0xFFFFE066), size.width * 0.36f)
-        }
+        Ico(Ico.COIN, 30.dp)
         Text(coins.toString(), color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 17.sp)
         Text("+", color = Neon.Lime, fontWeight = FontWeight.Black, fontSize = 20.sp)
     }
+}
+
+/** A big faint icon that gently bobs, used as card decoration. */
+@Composable
+private fun FloatingIcon(kind: Ico, tint: Color, modifier: Modifier) {
+    val t = rememberInfiniteTransition(label = "float")
+    val dy by t.animateFloat(
+        -8f, 8f,
+        infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "dy",
+    )
+    Ico(kind, 110.dp, tint, modifier.graphicsLayer { translationY = dy })
 }
 
 // ------------------------------------------------------------------ carousel
@@ -268,7 +304,12 @@ private fun ChallengeCard(app: AppState, c: Challenge) {
             .background(cardBrushes[c.id % cardBrushes.size])
             .padding(16.dp),
     ) {
-        Column(Modifier.align(Alignment.CenterStart).fillMaxWidth(0.75f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        FloatingIcon(
+            when (c.id) { 0 -> Ico.TROPHY; 1 -> Ico.TARGET; else -> Ico.CROWN },
+            Color.White.copy(alpha = 0.25f),
+            Modifier.align(Alignment.CenterEnd).padding(end = 24.dp),
+        )
+        Column(Modifier.align(Alignment.CenterStart).fillMaxWidth(0.62f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(c.title.uppercase(), color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
             Text(c.desc, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black, lineHeight = 24.sp)
             Text("Reward: ${c.rewardText}", color = Color(0xFFFFE066), fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -306,7 +347,8 @@ private fun DailyCard(app: AppState) {
             .background(cardBrushes[3])
             .padding(16.dp),
     ) {
-        Column(Modifier.align(Alignment.CenterStart).fillMaxWidth(0.75f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        FloatingIcon(Ico.COIN, Color.White, Modifier.align(Alignment.CenterEnd).padding(end = 24.dp))
+        Column(Modifier.align(Alignment.CenterStart).fillMaxWidth(0.62f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("DAILY REWARD", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
             Text("Free coins, every day", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
             if (can) {
@@ -325,6 +367,12 @@ private fun SnakeBar(app: AppState) {
     val s = app.settings
     val skin = Skins.byId(s.selectedSkin)
     val owned = s.count(Powers.HEADSTART.id)
+    val wiggle = rememberInfiniteTransition(label = "wiggle")
+    val phase by wiggle.animateFloat(
+        0f, 6.2831855f,
+        infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart),
+        label = "phase",
+    )
     Row(
         Modifier
             .fillMaxWidth()
@@ -342,7 +390,7 @@ private fun SnakeBar(app: AppState) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            SkinPreview(skin, Modifier.width(120.dp).height(44.dp))
+            SkinPreview(skin, Modifier.width(120.dp).height(44.dp), phase)
             Column {
                 Text("EDIT SNAKE", color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 14.sp)
                 Text(skin.name, color = Neon.Dim, fontSize = 11.sp)
@@ -350,23 +398,20 @@ private fun SnakeBar(app: AppState) {
         }
         val armed = app.headStartArmed
         val label = if (owned > 0) "START BIG ×$owned" else "START BIG"
-        Box(
+        val fg = if (armed) Color(0xFF14002B) else if (owned > 0) Neon.Lime else Neon.Dim
+        Row(
             Modifier
                 .padding(end = 8.dp)
+                .bounceClick { if (owned > 0) app.headStartArmed = !armed else app.open(Screen.SHOP) }
                 .clip(RoundedCornerShape(12.dp))
                 .background(if (armed) Neon.Lime else Color.Transparent)
                 .border(2.dp, if (owned > 0) Neon.Lime else Neon.Dim, RoundedCornerShape(12.dp))
-                .clickable {
-                    if (owned > 0) app.headStartArmed = !armed else app.open(Screen.SHOP)
-                }
                 .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Text(
-                label,
-                color = if (armed) Color(0xFF14002B) else if (owned > 0) Neon.Lime else Neon.Dim,
-                fontWeight = FontWeight.Black,
-                fontSize = 12.sp,
-            )
+            Ico(Ico.CHEVRONS, 14.dp, fg)
+            Text(label, color = fg, fontWeight = FontWeight.Black, fontSize = 12.sp)
         }
     }
 }
@@ -374,17 +419,24 @@ private fun SnakeBar(app: AppState) {
 // ------------------------------------------------------------------ right column
 
 @Composable
-private fun SideChip(label: String, accent: Color, onClick: () -> Unit) {
-    Box(
+private fun SideChip(label: String, accent: Color, icon: Ico?, onClick: () -> Unit) {
+    Row(
         Modifier
             .fillMaxWidth()
             .height(40.dp)
+            .bounceClick(onClick = onClick)
             .clip(RoundedCornerShape(12.dp))
             .background(Neon.Surface)
-            .border(2.dp, accent.copy(alpha = 0.8f), RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+            .border(2.dp, accent.copy(alpha = 0.8f), RoundedCornerShape(12.dp)),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
     ) {
+        if (icon != null) {
+            Ico(icon, 18.dp, accent)
+        } else {
+            Text("?", color = accent, fontWeight = FontWeight.Black, fontSize = 18.sp)
+        }
+        Spacer(Modifier.width(8.dp))
         Text(label, color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 15.sp, letterSpacing = 2.sp)
     }
 }
@@ -408,9 +460,9 @@ private fun ToggleHalf(label: String, selected: Boolean, modifier: Modifier, onC
     Box(
         modifier
             .fillMaxHeight()
+            .bounceClick(onClick = onClick)
             .clip(RoundedCornerShape(18.dp))
-            .background(if (selected) Neon.Violet else Color.Transparent)
-            .clickable(onClick = onClick),
+            .background(if (selected) Neon.Violet else Color.Transparent),
         contentAlignment = Alignment.Center,
     ) {
         Text(label, color = if (selected) Color(0xFF14002B) else Neon.Dim, fontWeight = FontWeight.Black, fontSize = 13.sp)

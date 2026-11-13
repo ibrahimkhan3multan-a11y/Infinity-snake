@@ -5,6 +5,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ncorti.kotlin.template.app.audio.AudioEngine
 import com.ncorti.kotlin.template.app.audio.Haptics
+import com.ncorti.kotlin.template.app.audio.MusicMode
+import com.ncorti.kotlin.template.app.audio.Sfx
 import com.ncorti.kotlin.template.app.data.Settings
 
 enum class Screen { MENU, PLAYING, SKINS, SHOP, SETTINGS, HOWTO }
@@ -40,11 +42,14 @@ class AppState(
 
     fun startGame(solo: Boolean) {
         settings.updateSoloMode(solo)
+        audio.musicMode = MusicMode.GAME
+        audio.play(Sfx.START)
         session = GameSession(this, solo)
         screen = Screen.PLAYING
     }
 
     fun toMenu() {
+        audio.musicMode = MusicMode.MENU
         session = null
         screen = Screen.MENU
     }

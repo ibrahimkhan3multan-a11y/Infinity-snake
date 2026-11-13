@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import com.ncorti.kotlin.template.app.audio.Sfx
 import com.ncorti.kotlin.template.app.game.Cfg
 import com.ncorti.kotlin.template.app.game.PI_F
 import com.ncorti.kotlin.template.app.game.Particles
@@ -17,7 +18,9 @@ import com.ncorti.kotlin.template.app.game.Snake
 import com.ncorti.kotlin.template.app.game.TWO_PI
 import com.ncorti.kotlin.template.app.game.World
 import com.ncorti.kotlin.template.app.game.WorldListener
+import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
@@ -115,6 +118,13 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
     var viewH = 1920f
     private var camInit = false
 
+    // Screen shake offset (world units), applied by the renderer.
+    var shakeX = 0f
+    var shakeY = 0f
+    private var shakeTime = 0f
+    private var wasBoosting = false
+    private var warned = false
+
     private var acc = 0f
     private var hudTimer = 0f
     private var overTimer = -1f
@@ -168,6 +178,42 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         }
         hudEnergy = if (p.maxEnergy > 0f) p.energy / p.maxEnergy else 0f
 
+        // Boost feedback: whoosh on start, a particle trail while it runs, a warning when nearly empty.
+        val boostNow = p.alive && p.boostActive
+        if (boostNow && !wasBoosting) app.audio.play(Sfx.BOOST)
+        wasBoosting = boostNow
+        if (boostNow && p.overdrive <= 0f) {
+            if (hudEnergy < 0.12f && !warned) {
+                warned = true
+                app.audio.play(Sfx.WARN)
+            }
+        } else if (hudEnergy > 0.3f) {
+            warned = false
+        }
+        if (boostNow && settings.quality > 0 && (frame and 1L) == 0L) {
+            val a = p.angle
+            val jx = (rnd.nextFloat() - 0.5f) * 50f
+            val jy = (rnd.nextFloat() - 0.5f) * 50f
+            particles.spawn(
+                p.xs[0] - cos(a) * p.radius,
+                p.ys[0] - sin(a) * p.radius,
+                -cos(a) * 70f + jx,
+                -sin(a) * 70f + jy,
+                0.35f,
+                if (p.overdrive > 0f) 0xFFFFD45C.toInt() else p.headColor,
+                3.5f,
+            )
+        }
+        if (shakeTime > 0f && settings.quality > 0) {
+            shakeTime -= dt
+            val m = 16f * (shakeTime / 0.45f).coerceAtLeast(0f)
+            shakeX = (rnd.nextFloat() - 0.5f) * 2f * m
+            shakeY = (rnd.nextFloat() - 0.5f) * 2f * m
+        } else {
+            shakeX = 0f
+            shakeY = 0f
+        }
+
         hudTimer -= dt
         if (hudTimer <= 0f) {
             hudTimer = 0.2f
@@ -177,7 +223,10 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         if (!p.alive && !finalized) finalizeRun(p)
         if (overTimer >= 0f) {
             overTimer -= dt
-            if (overTimer < 0f) over = true
+            if (overTimer < 0f) {
+                over = true
+                result?.let { if (it.newHighScore || it.challenges.isNotEmpty()) app.audio.play(Sfx.FANFARE) }
+            }
         }
     }
 
@@ -222,6 +271,13 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
             else -> p.overdrive = Cfg.OVERDRIVE_TIME
         }
         refreshHud()
+        app.audio.play(
+            when (power.id) {
+                Powers.SHIELD.id -> Sfx.SHIELD
+                Powers.MAGNET.id -> Sfx.MAGNET
+                else -> Sfx.OVERDRIVE
+            },
+        )
         app.vibrate(25)
     }
 
@@ -277,6 +333,7 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
     override fun onSnakeDied(snake: Snake, killer: Snake?) {
         if (killer != null && killer.isPlayer && !snake.isPlayer) {
             banner = "You eliminated ${snake.name}!"
+            app.audio.play(Sfx.KILL)
             bannerTimer = 2.5f
         }
         if (settings.quality > 0) {
@@ -284,6 +341,7 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
             particles.burst(snake.xs[0], snake.ys[0], snake.headColor, count, 260f, 6f, rnd)
         }
         if (snake.isPlayer) {
+            shakeTime = 0.45f
             app.audio.playBoom()
             app.vibrate(70)
         }

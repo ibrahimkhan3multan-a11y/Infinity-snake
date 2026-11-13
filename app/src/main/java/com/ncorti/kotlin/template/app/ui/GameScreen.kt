@@ -1,6 +1,15 @@
 package com.ncorti.kotlin.template.app.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +23,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,6 +53,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -67,6 +80,7 @@ import com.ncorti.kotlin.template.app.GameSession
 import com.ncorti.kotlin.template.app.game.Cfg
 import com.ncorti.kotlin.template.app.game.Power
 import com.ncorti.kotlin.template.app.game.Powers
+import kotlinx.coroutines.delay
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -241,8 +255,26 @@ fun GameScreen(app: AppState, session: GameSession) {
         val result = session.result
         if (session.over && result != null) {
             Scrim {
+                var shown by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) { shown = true }
+                val enter by animateFloatAsState(
+                    if (shown) 1f else 0.7f,
+                    spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessLow),
+                    label = "enter",
+                )
+                val scoreShown by animateIntAsState(if (shown) result.score else 0, tween(900), label = "score")
+                val lengthShown by animateIntAsState(if (shown) result.length else 0, tween(900), label = "length")
+                val coinsShown by animateIntAsState(if (shown) result.earnedCoins else 0, tween(900), label = "coins")
                 Row(
-                    Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(16.dp),
+                    Modifier
+                        .widthIn(max = 640.dp)
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .graphicsLayer {
+                            scaleX = enter
+                            scaleY = enter
+                            alpha = ((enter - 0.7f) / 0.3f).coerceIn(0f, 1f)
+                        },
                     horizontalArrangement = Arrangement.spacedBy(20.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -253,11 +285,11 @@ fun GameScreen(app: AppState, session: GameSession) {
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Black,
                         )
-                        ResultRow("Final score", result.score.toString())
+                        ResultRow("Final score", scoreShown.toString())
                         ResultRow("Best score", result.best.toString())
                         if (!result.solo) ResultRow("Final rank", "#${result.rank}")
-                        ResultRow("Snake length", result.length.toString())
-                        ResultRow("Coins earned", "+${result.earnedCoins}  (${result.kills} eliminations)")
+                        ResultRow("Snake length", lengthShown.toString())
+                        ResultRow("Coins earned", "+$coinsShown  (${result.kills} eliminations)")
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         result.challenges.forEach {
@@ -345,7 +377,29 @@ private fun StatsPanel(session: GameSession) {
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(session.hudScore.toString(), color = Neon.Text, fontSize = 26.sp, fontWeight = FontWeight.Black)
+            val score = session.hudScore
+            var pop by remember { mutableStateOf(false) }
+            LaunchedEffect(score) {
+                pop = true
+                delay(140)
+                pop = false
+            }
+            val popScale by animateFloatAsState(
+                if (pop) 1.3f else 1f,
+                spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+                label = "pop",
+            )
+            Text(
+                score.toString(),
+                color = Neon.Text,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.graphicsLayer {
+                    scaleX = popScale
+                    scaleY = popScale
+                    transformOrigin = TransformOrigin(0f, 1f)
+                },
+            )
             Text("SCORE", color = Neon.Dim, fontSize = 10.sp, letterSpacing = 1.sp, modifier = Modifier.padding(bottom = 5.dp))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -407,7 +461,7 @@ private fun Leaderboard(session: GameSession, myName: String, modifier: Modifier
         var meShown = false
         board.take(6).forEachIndexed { i, e ->
             if (e.isYou) meShown = true
-            BoardRow("${i + 1}. ${e.name}", e.score.toString(), e.isYou)
+            BoardRow("${i + 1}. ${e.name}", e.score.toString(), e.isYou, crown = i == 0)
         }
         if (!meShown && !session.solo && session.world.player.alive) {
             BoardRow("${session.hudRank}. $myName", session.hudScore.toString(), true)
@@ -416,8 +470,12 @@ private fun Leaderboard(session: GameSession, myName: String, modifier: Modifier
 }
 
 @Composable
-private fun BoardRow(name: String, score: String, you: Boolean) {
-    Row(Modifier.fillMaxWidth()) {
+private fun BoardRow(name: String, score: String, you: Boolean, crown: Boolean = false) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (crown) {
+            Ico(Ico.CROWN, 12.dp, Color(0xFFFFD45C))
+            Spacer(Modifier.width(4.dp))
+        }
         Text(
             name,
             color = if (you) Neon.Cyan else Neon.Text,
@@ -435,10 +493,10 @@ private fun HudIconButton(onClick: () -> Unit, description: String, draw: DrawSc
     Box(
         Modifier
             .size(42.dp)
+            .bounceClick(onClick = onClick)
             .clip(CircleShape)
             .background(Color(0x66000000))
-            .semantics { contentDescription = description }
-            .clickable(onClick = onClick),
+            .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.size(18.dp), onDraw = draw)
@@ -494,9 +552,18 @@ private fun BoostButton(session: GameSession, modifier: Modifier) {
     var pressed by remember { mutableStateOf(false) }
     val energy = session.hudEnergy
     val low = energy < 0.15f
+    val squish by animateFloatAsState(
+        if (pressed) 0.92f else 1f,
+        spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "boost",
+    )
     Box(
         modifier
             .size(100.dp)
+            .graphicsLayer {
+                scaleX = squish
+                scaleY = squish
+            }
             .pointerInput(session) {
                 // Hold-to-boost that survives the thumb sliding off the button: it only ends when
                 // the finger actually lifts (or the gesture is cancelled).
@@ -562,21 +629,29 @@ private fun BoostButton(session: GameSession, modifier: Modifier) {
 @Composable
 private fun PowerButton(session: GameSession, power: Power, secs: Int, owned: Int) {
     val active = secs > 0
+    val pulse = rememberInfiniteTransition(label = "power")
+    val glow by pulse.animateFloat(
+        0.35f, 1f,
+        infiniteRepeatable(tween(650), RepeatMode.Reverse),
+        label = "glow",
+    )
+    val tint = if (active) Neon.Cyan else Color.White
     Box(
         Modifier
-            .size(58.dp)
+            .size(60.dp)
+            .bounceClick(sound = null) { session.usePower(power) }
             .clip(CircleShape)
             .background(Color(0xAA000000))
-            .border(2.dp, if (active) Neon.Cyan else Neon.Violet, CircleShape)
-            .clickable { session.usePower(power) },
+            .border(2.dp, if (active) Neon.Cyan.copy(alpha = glow) else Neon.Violet, CircleShape)
+            .semantics { contentDescription = power.name.uppercase() },
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(power.name.uppercase(), color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
+            Ico(powerIcon(power.id), 24.dp, tint)
             Text(
                 if (active) "${secs}s" else "×$owned",
                 color = if (active) Neon.Cyan else Neon.Lime,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
             )
         }

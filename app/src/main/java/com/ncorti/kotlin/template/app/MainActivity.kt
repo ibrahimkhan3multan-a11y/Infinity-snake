@@ -6,7 +6,10 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.key
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -17,6 +20,7 @@ import com.ncorti.kotlin.template.app.data.Settings
 import com.ncorti.kotlin.template.app.ui.GameScreen
 import com.ncorti.kotlin.template.app.ui.HowToScreen
 import com.ncorti.kotlin.template.app.ui.InfinityTheme
+import com.ncorti.kotlin.template.app.ui.LocalAudio
 import com.ncorti.kotlin.template.app.ui.MenuScreen
 import com.ncorti.kotlin.template.app.ui.SettingsScreen
 import com.ncorti.kotlin.template.app.ui.ShopScreen
@@ -77,12 +81,16 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun Root(app: AppState) {
     BackHandler(enabled = app.screen != Screen.MENU && app.screen != Screen.PLAYING) { app.back() }
-    when (app.screen) {
-        Screen.MENU -> MenuScreen(app)
-        Screen.PLAYING -> app.session?.let { s -> key(s) { GameScreen(app, s) } }
-        Screen.SKINS -> SkinsScreen(app)
-        Screen.SHOP -> ShopScreen(app)
-        Screen.SETTINGS -> SettingsScreen(app)
-        Screen.HOWTO -> HowToScreen(app)
+    CompositionLocalProvider(LocalAudio provides app.audio) {
+        Crossfade(targetState = app.screen, animationSpec = tween(220), label = "screens") { screen ->
+            when (screen) {
+                Screen.MENU -> MenuScreen(app)
+                Screen.PLAYING -> app.session?.let { s -> key(s) { GameScreen(app, s) } }
+                Screen.SKINS -> SkinsScreen(app)
+                Screen.SHOP -> ShopScreen(app)
+                Screen.SETTINGS -> SettingsScreen(app)
+                Screen.HOWTO -> HowToScreen(app)
+            }
+        }
     }
 }

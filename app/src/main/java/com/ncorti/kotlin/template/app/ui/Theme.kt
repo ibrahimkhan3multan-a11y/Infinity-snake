@@ -1,6 +1,16 @@
 package com.ncorti.kotlin.template.app.ui
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
+import com.ncorti.kotlin.template.app.audio.Sfx
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,23 +80,48 @@ fun NeonButton(
     modifier: Modifier = Modifier,
     primary: Boolean = true,
     accent: Color = Neon.Violet,
+    icon: (@Composable () -> Unit)? = null,
 ) {
+    val audio = LocalAudio.current
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        if (pressed) 0.94f else 1f,
+        spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "press",
+    )
+    val click = {
+        audio.play(Sfx.CLICK)
+        onClick()
+    }
+    val m = modifier
+        .height(54.dp)
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
     if (primary) {
         Button(
-            onClick = onClick,
-            modifier = modifier.height(54.dp),
+            onClick = click,
+            modifier = m,
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color(0xFF14002B)),
+            interactionSource = src,
         ) {
+            icon?.invoke()
+            if (icon != null) Spacer(Modifier.width(8.dp))
             Text(text, fontSize = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, maxLines = 1)
         }
     } else {
         OutlinedButton(
-            onClick = onClick,
-            modifier = modifier.height(54.dp),
+            onClick = click,
+            modifier = m,
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = Neon.Text),
+            interactionSource = src,
         ) {
+            icon?.invoke()
+            if (icon != null) Spacer(Modifier.width(8.dp))
             Text(text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
     }

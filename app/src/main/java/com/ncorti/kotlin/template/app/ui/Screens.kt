@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ncorti.kotlin.template.app.AppState
+import com.ncorti.kotlin.template.app.audio.Sfx
 import com.ncorti.kotlin.template.app.game.Skin
 import com.ncorti.kotlin.template.app.game.Skins
 import kotlin.math.sin
@@ -133,6 +134,7 @@ fun SkinsScreen(app: AppState) {
 @Composable
 private fun SkinCard(app: AppState, skin: Skin, modifier: Modifier) {
     val s = app.settings
+    val audio = LocalAudio.current
     val owned = skin.id in s.unlocked
     val selected = s.selectedSkin == skin.id
     Column(
@@ -151,7 +153,7 @@ private fun SkinCard(app: AppState, skin: Skin, modifier: Modifier) {
             owned -> NeonButton("Select", { s.selectSkin(skin.id) }, Modifier.fillMaxWidth().heightIn(min = 40.dp), primary = false)
             else -> NeonButton(
                 "Unlock · ${skin.cost}",
-                { s.unlockSkin(skin.id) },
+                { if (s.unlockSkin(skin.id)) audio.play(Sfx.COIN) else audio.play(Sfx.DENIED) },
                 Modifier.fillMaxWidth().heightIn(min = 40.dp),
                 primary = s.coins >= skin.cost,
                 accent = Neon.Pink,
@@ -161,14 +163,14 @@ private fun SkinCard(app: AppState, skin: Skin, modifier: Modifier) {
 }
 
 @Composable
-fun SkinPreview(skin: Skin, modifier: Modifier = Modifier) {
+fun SkinPreview(skin: Skin, modifier: Modifier = Modifier, phase: Float = 0f) {
     Canvas(modifier) {
         val segs = 26
         val r = size.height * 0.2f
         for (i in segs - 1 downTo 0) {
             val t = i.toFloat() / (segs - 1)
             val x = size.width * (0.88f - 0.76f * t)
-            val y = size.height / 2f + sin(t * 9f) * size.height * 0.22f
+            val y = size.height / 2f + sin(t * 9f + phase) * size.height * 0.22f
             val col = if (skin.rainbow) Color.hsv((t * 320f) % 360f, 0.75f, 1f) else mix(Color(skin.head), Color(skin.tail), t)
             if (skin.glow) drawCircle(col.copy(alpha = 0.2f), r * 1.8f, Offset(x, y))
             drawCircle(col, r * (1f - 0.35f * t), Offset(x, y))
