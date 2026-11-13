@@ -90,6 +90,7 @@ private fun Root(app: AppState) {
                 Screen.SHOP -> ShopScreen(app)
                 Screen.SETTINGS -> SettingsScreen(app)
                 Screen.HOWTO -> HowToScreen(app)
+                Screen.ONLINE -> OnlineScreen(app)
             }
         }
     }

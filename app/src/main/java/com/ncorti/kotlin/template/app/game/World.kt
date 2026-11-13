@@ -93,6 +93,54 @@ class World(
         return bot
     }
 
+    // ---------------------------------------------------------------- online players
+
+    /** Adds (or reuses a free slot for) a remote human player and places them in the arena. */
+    fun addRemote(name: String, head: Int, tail: Int, glow: Boolean, rainbow: Boolean): Snake {
+        var s = snakes.firstOrNull { it.gone }
+        if (s == null) {
+            s = Snake(snakes.size, false, name)
+            snakes.add(s)
+            if (snakes.size > killer.size) killer = killer.copyOf(snakes.size * 2)
+        }
+        s.gone = false
+        s.remote = true
+        s.name = name
+        s.headColor = head
+        s.tailColor = tail
+        s.glow = glow
+        s.rainbow = rainbow
+        s.kills = 0
+        s.deaths = 0
+        s.level = 1
+        respawnRemote(s)
+        return s
+    }
+
+    /** (Re)spawns a remote player with the standard start size and spawn protection. */
+    fun respawnRemote(s: Snake) {
+        findSpawn(600f)
+        s.place(tmp[0], tmp[1], rnd.nextFloat() * TWO_PI - PI_F, Cfg.START_MASS)
+        s.grace = Cfg.SPAWN_GRACE
+        s.kills = 0
+    }
+
+    /** A remote player left: their body becomes food and their slot is free for reuse. */
+    fun removeRemote(s: Snake) {
+        if (s.alive) {
+            s.alive = false
+            dropBody(s)
+        }
+        s.remote = false
+        s.gone = true
+    }
+
+    fun clearFood() {
+        for (i in 0 until Cfg.FOOD_CAP) {
+            if (falive[i]) removeFood(i)
+        }
+    }
+
     // ---------------------------------------------------------------- food
 
     fun addFood(x: Float, y: Float, v: Float, color: Int) {
@@ -188,13 +236,13 @@ class World(
         for (i in 0 until n) {
             val s = snakes[i]
             if (!s.alive) {
-                if (!s.isPlayer) {
+                if (!s.human && !s.gone) {
                     s.respawnTimer -= dt
                     if (s.respawnTimer <= 0f) respawnBot(s)
                 }
                 continue
             }
-            if (!s.isPlayer) {
+            if (!s.human) {
                 s.thinkTimer -= dt
                 if (s.thinkTimer <= 0f) {
                     BotBrain.think(this, s)
@@ -288,7 +336,7 @@ class World(
         dropBody(s)
         val ks = if (k in 0 until snakes.size) snakes[k] else null
         if (ks != null && ks !== s) ks.kills++
-        if (!s.isPlayer) s.respawnTimer = 3f + rnd.nextFloat() * 2f
+        if (!s.human) s.respawnTimer = 3f + rnd.nextFloat() * 2f
         listener?.onSnakeDied(s, ks)
     }
 

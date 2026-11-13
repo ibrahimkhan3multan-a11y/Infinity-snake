@@ -219,6 +219,21 @@ fun GameScreen(app: AppState, session: GameSession) {
                 Minimap(session)
             }
 
+            session.room?.let { room ->
+                val peers = if (room.isHost) session.peerCount + 1 else null
+                Text(
+                    "ROOM ${room.code}" + (if (peers != null) "  ·  $peers online" else ""),
+                    color = Neon.Cyan,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0x66000000))
+                        .padding(horizontal = 10.dp, vertical = 3.dp),
+                )
+            }
             if (session.banner.isNotEmpty()) {
                 Text(
                     session.banner,
@@ -227,6 +242,7 @@ fun GameScreen(app: AppState, session: GameSession) {
                     fontSize = 15.sp,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
+                        .padding(top = 26.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(Color(0x99000000))
                         .padding(horizontal = 14.dp, vertical = 6.dp),
@@ -251,7 +267,7 @@ fun GameScreen(app: AppState, session: GameSession) {
 
         // ---------------------------------------------------------------- overlays
         val result = session.result
-        if (session.over && result != null) {
+        if (session.disconnected == null && session.over && result != null) {
             Scrim {
                 var shown by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) { shown = true }
@@ -293,9 +309,25 @@ fun GameScreen(app: AppState, session: GameSession) {
                         result.challenges.forEach {
                             Text("Challenge complete! $it", color = Neon.Lime, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
-                        NeonButton("PLAY AGAIN", { app.startGame(session.solo) }, Modifier.fillMaxWidth())
+                        NeonButton(
+                            "PLAY AGAIN",
+                            { if (session.isOnline) session.respawnInRoom() else app.startGame(session.solo) },
+                            Modifier.fillMaxWidth(),
+                        )
                         NeonButton("MAIN MENU", { app.toMenu() }, Modifier.fillMaxWidth(), primary = false)
                     }
+                }
+            }
+        } else if (session.disconnected != null) {
+            Scrim {
+                Column(
+                    Modifier.widthIn(max = 360.dp).fillMaxWidth().padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text("DISCONNECTED", color = Neon.Pink, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                    Text(session.disconnected ?: "", color = Neon.Text, fontSize = 14.sp, textAlign = TextAlign.Center)
+                    NeonButton("MAIN MENU", { app.toMenu() }, Modifier.fillMaxWidth())
                 }
             }
         } else if (session.paused) {
@@ -307,9 +339,19 @@ fun GameScreen(app: AppState, session: GameSession) {
                 ) {
                     Text("PAUSED", color = Neon.Text, fontSize = 26.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
                     NeonButton("RESUME", { session.paused = false }, Modifier.fillMaxWidth())
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        NeonButton("RESTART", { app.startGame(session.solo) }, Modifier.weight(1f), primary = false)
-                        NeonButton("MAIN MENU", { app.toMenu() }, Modifier.weight(1f), primary = false)
+                    if (session.isOnline) {
+                        Text(
+                            "The arena keeps running while you're in this menu. Leaving closes the room if you are the host.",
+                            color = Neon.Dim,
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center,
+                        )
+                        NeonButton("LEAVE ROOM", { app.toMenu() }, Modifier.fillMaxWidth(), primary = false)
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            NeonButton("RESTART", { app.startGame(session.solo) }, Modifier.weight(1f), primary = false)
+                            NeonButton("MAIN MENU", { app.toMenu() }, Modifier.weight(1f), primary = false)
+                        }
                     }
                 }
             }

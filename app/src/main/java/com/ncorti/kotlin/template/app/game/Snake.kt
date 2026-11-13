@@ -10,7 +10,13 @@ import kotlin.math.sqrt
  * following point is pulled toward the previous one to keep a fixed spacing, so the body follows
  * the head naturally without any per-frame allocation.
  */
-class Snake(val id: Int, val isPlayer: Boolean, val name: String) {
+class Snake(val id: Int, val isPlayer: Boolean, var name: String) {
+    /** Controlled by a remote player (online rooms). Never driven by the bot brain or auto-respawned. */
+    var remote = false
+    /** A remote player's slot that nobody uses any more; skipped by everything until reused. */
+    var gone = false
+    val human: Boolean get() = isPlayer || remote
+
     val xs = FloatArray(Cfg.MAX_SEGS)
     val ys = FloatArray(Cfg.MAX_SEGS)
     var n = 0

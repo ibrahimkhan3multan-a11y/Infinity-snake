@@ -12,17 +12,32 @@ import com.ncorti.kotlin.template.app.game.Cfg
 import com.ncorti.kotlin.template.app.game.PI_F
 import com.ncorti.kotlin.template.app.game.Particles
 import com.ncorti.kotlin.template.app.game.Power
+import com.ncorti.kotlin.template.app.game.PowerState
 import com.ncorti.kotlin.template.app.game.Powers
 import com.ncorti.kotlin.template.app.game.Skins
 import com.ncorti.kotlin.template.app.game.Snake
 import com.ncorti.kotlin.template.app.game.TWO_PI
 import com.ncorti.kotlin.template.app.game.World
+import com.ncorti.kotlin.template.app.net.GuestLogic
+import com.ncorti.kotlin.template.app.net.HostLogic
+import com.ncorti.kotlin.template.app.net.RelayClient
+import org.json.JSONObject
 import com.ncorti.kotlin.template.app.game.WorldListener
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
+
+/** The online room a session belongs to. */
+class OnlineRoom(
+    val client: RelayClient,
+    val code: String,
+    val isHost: Boolean,
+    val bots: Int = 0,
+    /** Guests only: the introduction sent to the host (skin, upgrade levels). */
+    val hello: JSONObject? = null,
+)
 
 class BoardEntry(val name: String, val score: Int, val isYou: Boolean)
 
@@ -61,17 +76,51 @@ class JoystickState {
  * One run of the game: the world plus camera, particles, HUD values and game-over bookkeeping.
  * It lives in [AppState], not in a composable, so rotating the device never restarts the run.
  */
-class GameSession(private val app: AppState, val solo: Boolean) : WorldListener {
+class GameSession(
+    private val app: AppState,
+    val solo: Boolean,
+    /** Non-null for an online room: this phone is either the host (runs the arena) or a guest. */
+    val room: OnlineRoom? = null,
+) : WorldListener {
     private val settings = app.settings
     private val rnd = Random(System.nanoTime())
+    private val isGuest = room != null && !room.isHost
     val world = World(
         rnd = rnd,
-        botCount = if (solo) 0 else Cfg.BOT_COUNT,
+        botCount = when {
+            room != null -> if (room.isHost) room.bots else 0
+            solo -> 0
+            else -> Cfg.BOT_COUNT
+        },
         deadlyWalls = settings.walls,
         playerSkin = Skins.byId(settings.selectedSkin),
         listener = null,
+        ambientFood = if (isGuest) 0 else Cfg.AMBIENT_FOOD,
         playerName = settings.playerName,
     )
+    private val host: HostLogic? = if (room != null && room.isHost) HostLogic(world, room.client) else null
+    private val guest: GuestLogic? = if (isGuest) {
+        GuestLogic(
+            world, room!!.client, room.hello!!,
+            object : GuestLogic.Listener {
+                override fun onKilled(victim: String) = showBanner("You eliminated $victim!", Sfx.KILL)
+                override fun onOver(score: Int, rank: Int, length: Int, kills: Int) = finalizeWith(score, rank, length, kills)
+                override fun onRespawned() = resetAfterRespawn()
+            },
+        )
+    } else {
+        null
+    }
+
+    /** Set when the connection to the room is lost: a message to show. */
+    var disconnected by mutableStateOf<String?>(null)
+        private set
+    val isOnline: Boolean get() = room != null
+    var peerCount by mutableIntStateOf(0)
+        private set
+
+    /** Power (active, cooldown) pairs mirrored from the host, for guests. */
+    private val remotePower: Array<Pair<Int, Int>>? get() = guest?.powers
     val particles = Particles(300)
     val input = InputState()
     val joystick = JoystickState()
@@ -126,6 +175,7 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
 
     init {
         world.listener = this
+        guest?.sendHello()
         val me = world.player
         me.maxEnergy = Powers.tankCapacity(settings.tankLevel)
         me.energy = me.maxEnergy
@@ -137,11 +187,18 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
 
     fun tick(dtRaw: Float) {
         frame++
-        if (paused) return
+        // An online arena keeps running while the pause menu is open: other people are in it.
+        if (paused && room == null) return
         val dt = dtRaw.coerceIn(0f, 0.1f)
         val p = world.player
 
-        if (p.alive) {
+        if (room != null) pollNet()
+        if (guest != null) {
+            tickGuest(dt, p)
+            return
+        }
+
+        if (p.alive && !paused) {
             if (input.keyTurn != 0) {
                 input.angle += input.keyTurn * 3.2f * dt
                 if (input.angle > PI_F) input.angle -= TWO_PI else if (input.angle < -PI_F) input.angle += TWO_PI
@@ -151,6 +208,7 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
             p.turnMul = settings.sensitivity
         }
 
+        host?.beforeStep()
         acc += dt
         var steps = 0
         while (acc >= Cfg.STEP && steps < 5) {
@@ -160,6 +218,7 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         }
         if (steps == 5) acc = 0f
 
+        host?.afterFrame(dt)
         particles.update(dt)
         tickPowers(dt)
         updateCamera(dt, p)
@@ -221,6 +280,94 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         }
     }
 
+    private fun pollNet() {
+        val client = room!!.client
+        while (true) {
+            val f = client.inbox.poll() ?: break
+            when (f.optString("t")) {
+                "_closed" -> disconnected = if (disconnected == null) "Connection lost" else disconnected
+                "closed" -> disconnected = "The host left the room"
+                "error" -> disconnected = f.optString("msg", "Error")
+                else -> {
+                    host?.handle(f)
+                    guest?.handle(f)
+                }
+            }
+        }
+        peerCount = host?.guestCount ?: 0
+    }
+
+    private fun tickGuest(dt: Float, p: Snake) {
+        val g = guest!!
+        if (input.keyTurn != 0) {
+            input.angle += input.keyTurn * 3.2f * dt
+            if (input.angle > PI_F) input.angle -= TWO_PI else if (input.angle < -PI_F) input.angle += TWO_PI
+        }
+        val before = g.snapshots
+        g.sendInput(input.angle, input.touchBoost || input.keyBoost, dt)
+        if (g.update(dt)) app.audio.playEat()
+        if (before == 0 && g.snapshots > 0) camInit = false
+        particles.update(dt)
+        updateCamera(dt, p)
+        hudEnergy = if (g.maxEnergy > 0f) g.energy / g.maxEnergy else 0f
+        if (bannerTimer > 0f) {
+            bannerTimer -= dt
+            if (bannerTimer <= 0f) banner = ""
+        }
+        val boostNow = p.alive && p.boostActive
+        if (boostNow && !wasBoosting) app.audio.play(Sfx.BOOST)
+        wasBoosting = boostNow
+        tickPowers(dt)
+        hudTimer -= dt
+        if (hudTimer <= 0f) {
+            hudTimer = 0.2f
+            refreshHud()
+        }
+        if (overTimer >= 0f) {
+            overTimer -= dt
+            if (overTimer < 0f) {
+                over = true
+                result?.let { if (it.newHighScore || it.challenges.isNotEmpty()) app.audio.play(Sfx.FANFARE) }
+            }
+        }
+    }
+
+    private fun showBanner(text: String, sfx: Sfx) {
+        banner = text
+        bannerTimer = 2.5f
+        app.audio.play(sfx)
+    }
+
+    /** A guest asks the host for a fresh snake after elimination. */
+    private fun resetAfterRespawn() {
+        finalized = false
+        overTimer = -1f
+        over = false
+        result = null
+        camInit = false
+    }
+
+    /** Online: bring the local player back into the same running arena (host) or ask the host (guest). */
+    fun respawnInRoom() {
+        if (guest != null) {
+            guest.requestRespawn()
+            return
+        }
+        val me = world.player
+        world.respawnRemote(me)
+        me.maxEnergy = Powers.tankCapacity(settings.tankLevel)
+        me.energy = me.maxEnergy
+        powers.reset()
+        resetAfterRespawn()
+        input.angle = me.angle
+        hudEnergy = 1f
+    }
+
+    /** Leaves the room and drops the connection. */
+    fun close() {
+        room?.client?.close()
+    }
+
     private fun updateCamera(dt: Float, p: Snake) {
         val minDim = minOf(viewW, viewH)
         val targetZoom = minDim / (400f + 12f * sqrt(p.mass))
@@ -241,50 +388,22 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
 
     // ---- Powers: permanent, with a cooldown that starts when the effect ends.
 
-    private val powerWait = FloatArray(Powers.all.size)   // seconds until ready (effect time + cooldown)
+    private val powers = PowerState()
     /** Bumped ~10x a second so power buttons redraw their ring. */
     var hudPowerTick by mutableIntStateOf(0)
         private set
     private var powerTickTimer = 0f
 
-    private fun isActive(power: Power): Boolean {
-        val p = world.player
-        return when (power.id) {
-            Powers.SHIELD.id -> p.shield > 0f
-            Powers.MAGNET.id -> p.magnet > 0f
-            Powers.OVERDRIVE.id -> p.overdrive > 0f
-            Powers.FREEZE.id -> p.freeze > 0f
-            else -> false
-        }
-    }
-
     /** Whole seconds of an active effect left (0 when inactive). */
     fun activeSeconds(power: Power): Int {
         hudPowerTick
-        val p = world.player
-        val t = when (power.id) {
-            Powers.SHIELD.id -> p.shield
-            Powers.MAGNET.id -> p.magnet
-            Powers.OVERDRIVE.id -> p.overdrive
-            Powers.FREEZE.id -> p.freeze
-            else -> 0f
-        }
-        return kotlin.math.ceil(t).toInt()
+        return remotePower?.get(Powers.all.indexOf(power))?.first ?: powers.activeSeconds(world.player, power)
     }
 
     /** Whole seconds until a power can be used again, once its effect has ended (0 = ready). */
     fun cooldownSeconds(power: Power): Int {
         hudPowerTick
-        val i = Powers.all.indexOf(power)
-        val p = world.player
-        val effect = when (power.id) {
-            Powers.SHIELD.id -> p.shield
-            Powers.MAGNET.id -> p.magnet
-            Powers.OVERDRIVE.id -> p.overdrive
-            Powers.FREEZE.id -> p.freeze
-            else -> 0f
-        }
-        return kotlin.math.ceil((powerWait[i] - effect).coerceAtLeast(0f)).toInt()
+        return remotePower?.get(Powers.all.indexOf(power))?.second ?: powers.cooldownSeconds(world.player, power)
     }
 
     /** 0 = ready, 1 = just started cooling down; drives the ring sweep. */
@@ -295,25 +414,28 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         return if (total <= 0f) 0f else (cooldownSeconds(power) / total).coerceIn(0f, 1f)
     }
 
-    fun powerReady(power: Power): Boolean =
-        settings.powerLevel(power.id) > 0 && !isActive(power) &&
-            powerWait[Powers.all.indexOf(power)] <= 0f
+    fun powerReady(power: Power): Boolean {
+        val level = settings.powerLevel(power.id)
+        if (level <= 0) return false
+        val rp = remotePower
+        if (rp != null) {
+            val i = Powers.all.indexOf(power)
+            return world.player.alive && rp[i].first <= 0 && rp[i].second <= 0
+        }
+        return powers.ready(world.player, power, level)
+    }
 
     /** Activates a power if it is unlocked, off cooldown and you are alive. */
     fun usePower(power: Power) {
         val p = world.player
         if (!p.alive || paused || over || !powerReady(power)) return
-        val level = settings.powerLevel(power.id)
-        val dur = power.duration(level)
-        when (power.id) {
-            Powers.SHIELD.id -> p.shield = dur
-            Powers.MAGNET.id -> p.magnet = dur
-            Powers.OVERDRIVE.id -> p.overdrive = dur
-            Powers.FREEZE.id -> p.freeze = dur
-            else -> p.energy = p.maxEnergy
+        if (guest != null) {
+            guest.requestPower(Powers.all.indexOf(power))
+        } else {
+            val level = settings.powerLevel(power.id)
+            if (!powers.use(p, power, level)) return
+            refreshHud()
         }
-        powerWait[Powers.all.indexOf(power)] = dur + power.cooldown(level)
-        refreshHud()
         hudPowerTick++
         app.audio.play(
             when (power.id) {
@@ -327,7 +449,7 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
     }
 
     private fun tickPowers(dt: Float) {
-        for (i in powerWait.indices) if (powerWait[i] > 0f) powerWait[i] = (powerWait[i] - dt).coerceAtLeast(0f)
+        powers.tick(dt)
         powerTickTimer -= dt
         if (powerTickTimer <= 0f) {
             powerTickTimer = 0.1f
@@ -336,6 +458,15 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
     }
 
     private fun refreshHud() {
+        val g = guest
+        if (g != null) {
+            hudScore = g.score
+            hudLength = g.length
+            hudRank = g.rank
+            hudAlive = g.alive
+            hudBoard = g.board
+            return
+        }
         val p = world.player
         hudScore = p.score
         hudLength = p.n
@@ -349,25 +480,27 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
         hudBoard = list
     }
 
-    private fun finalizeRun(p: Snake) {
+    private fun finalizeRun(p: Snake) = finalizeWith(p.score, p.lastRank, p.n, p.kills)
+
+    private fun finalizeWith(score: Int, rank: Int, length: Int, kills: Int) {
+        if (finalized) return
         finalized = true
-        val score = p.score
         val previousBest = settings.highScore
-        val earned = settings.recordRun(score, p.lastRank, solo, p.kills)
-        val completed = settings.applyChallenges(score, p.kills, p.lastRank, solo)
+        val earned = settings.recordRun(score, rank, solo, kills)
+        val completed = settings.applyChallenges(score, kills, rank, solo)
         result = RunResult(
             score = score,
             best = settings.highScore,
-            rank = p.lastRank,
-            length = p.n,
+            rank = rank,
+            length = length,
             earnedCoins = earned,
-            kills = p.kills,
+            kills = kills,
             challenges = completed.map { "${it.title}: ${it.rewardText}" },
             newHighScore = score > previousBest,
             solo = solo,
         )
         hudScore = score
-        hudRank = p.lastRank
+        hudRank = rank
         overTimer = 1.2f
     }
 
@@ -382,6 +515,7 @@ class GameSession(private val app: AppState, val solo: Boolean) : WorldListener 
     }
 
     override fun onSnakeDied(snake: Snake, killer: Snake?) {
+        host?.snakeDied(snake, killer)
         if (killer != null && killer.isPlayer && !snake.isPlayer) {
             banner = "You eliminated ${snake.name}!"
             app.audio.play(Sfx.KILL)

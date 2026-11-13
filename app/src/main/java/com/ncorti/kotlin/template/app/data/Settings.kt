@@ -66,6 +66,9 @@ class Settings(context: Context) {
         private set
     /** 0 = on-screen joystick (default), 1 = touch and drag. */
     var controlMode by mutableIntStateOf(sp.getInt("control", 0))
+
+    /** Address of the relay server used for online rooms (empty until the player enters one). */
+    var serverUrl by mutableStateOf(sp.getString("server", "") ?: "")
         private set
 
     fun updateName(v: String) {
@@ -122,6 +125,7 @@ class Settings(context: Context) {
     fun updateWalls(v: Boolean) { walls = v; sp.edit().putBoolean("walls", v).apply() }
     fun updateSensitivity(v: Float) { sensitivity = v; sp.edit().putFloat("sensitivity", v).apply() }
     fun updateQuality(v: Int) { quality = v; sp.edit().putInt("quality", v).apply() }
+    fun updateServerUrl(v: String) { serverUrl = v.trim(); sp.edit().putString("server", serverUrl).apply() }
     fun updateControlMode(v: Int) { controlMode = v; sp.edit().putInt("control", v).apply() }
 
     fun selectSkin(id: Int) {

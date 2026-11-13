@@ -33,6 +33,7 @@ object Cfg {
     const val SPAWN_GRACE = 2.5f
     const val BOARD_SIZE = 6
     const val BOT_COUNT = 14
+    const val ONLINE_BOTS = 6
 }
 
 /** Visual and pickup radius of a food item with the given value. */

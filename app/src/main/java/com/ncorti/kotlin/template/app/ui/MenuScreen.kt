@@ -112,6 +112,7 @@ fun MenuScreen(app: AppState) {
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        SideChip("ONLINE", Neon.Lime, Ico.CROWN) { app.open(Screen.ONLINE) }
                         SideChip("SHOP", Neon.Pink, Ico.BAG) { app.open(Screen.SHOP) }
                         SideChip("SKINS", Neon.Violet, Ico.SNAKE) { app.open(Screen.SKINS) }
                         SideChip("HELP", Neon.Cyan, null) { app.open(Screen.HOWTO) }
@@ -404,7 +405,7 @@ private fun SideChip(label: String, accent: Color, icon: Ico?, onClick: () -> Un
     Row(
         Modifier
             .fillMaxWidth()
-            .height(40.dp)
+            .height(36.dp)
             .bounceClick(onClick = onClick)
             .clip(RoundedCornerShape(12.dp))
             .background(Neon.Surface)
