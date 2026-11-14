@@ -271,21 +271,39 @@ class GameFlowTest {
         assertNotNull(boost)
         var speed = 0f
         var massBefore = 0f
-        // A shared CI emulator can drop a touch now and then, so allow a couple of attempts.
+        // A shared CI emulator can drop a touch now and then, so allow a couple of attempts. Speed is
+        // measured only over the moments the game itself reports boost as active.
         for (attempt in 1..3) {
-            val startX = onApp { app, _ -> app.session!!.world.player.xs[0] }
-            val startY = onApp { app, _ -> app.session!!.world.player.ys[0] }
-            val t0 = worldTime()
+            onApp { app, _ -> app.session!!.paused = false }
             massBefore = onApp { app, _ -> app.session!!.world.player.mass }
+            val samples = ArrayList<FloatArray>() // t, x, y, active
+            val sampler = Thread {
+                repeat(34) {
+                    samples.add(
+                        onApp { app, _ ->
+                            val s = app.session!!
+                            val p = s.world.player
+                            floatArrayOf(s.world.time, p.xs[0], p.ys[0], if (p.boostActive) 1f else 0f)
+                        },
+                    )
+                    Thread.sleep(50)
+                }
+            }
+            sampler.start()
             val bb = boost.visibleBounds
-            device.swipe(bb.centerX(), bb.centerY(), bb.centerX() + 3, bb.centerY(), 300) // ~1.5 s press-and-hold
-            val dt = worldTime() - t0
-            val dist = onApp { app, _ -> hypot(app.session!!.world.player.xs[0] - startX, app.session!!.world.player.ys[0] - startY) }
-            speed = dist / dt
+            device.swipe(bb.centerX(), bb.centerY(), bb.centerX() + 3, bb.centerY(), 300)
+            sampler.join()
+            val active = samples.filter { it[3] == 1f }
+            if (active.size >= 5) {
+                val first = active.first()
+                val last = active.last()
+                val dt = last[0] - first[0]
+                if (dt > 0.2f) speed = hypot(last[1] - first[1], last[2] - first[2]) / dt
+            }
             if (speed > Cfg.BASE_SPEED * 1.2f) break
             pad(500)
         }
-        assertTrue("average speed $speed should exceed base ${Cfg.BASE_SPEED}", speed > Cfg.BASE_SPEED * 1.2f)
+        assertTrue("average speed while boosting $speed should exceed base ${Cfg.BASE_SPEED}", speed > Cfg.BASE_SPEED * 1.2f)
         val after = onApp { app, _ -> app.session!!.world.player.mass }
         assertTrue("boost must not burn length ($massBefore -> $after)", after >= massBefore - 0.01f)
         assertFalse("boost released", onApp { app, _ -> app.session!!.input.touchBoost })
