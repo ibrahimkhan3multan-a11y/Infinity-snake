@@ -90,9 +90,21 @@ class AppState(
             }
         }
         lan = relay
-        val request = JSONObject().put("name", settings.playerName).put("t", "host").put("public", false)
+        // A public room, so a friend only needs this phone's address (no room code) to get in.
+        val request = JSONObject().put("name", settings.playerName).put("t", "quick")
         val address = if (relay.port == LocalRelay.DEFAULT_PORT) ip else "$ip:${relay.port}"
         begin("127.0.0.1:${relay.port}", request, "host", bots, address)
+    }
+
+    /** Joins the game hosted by a phone on the same Wi-Fi, using only that phone's address. */
+    fun joinOnWifi(address: String) {
+        if (onlineBusy) return
+        if (address.isBlank()) {
+            onlineStatus = "Type the host's address first."
+            return
+        }
+        settings.updateLanHost(address)
+        begin(address, JSONObject().put("name", settings.playerName).put("t", "quick"), "wifijoin", 0, null)
     }
 
     private fun begin(url: String, request: JSONObject, kind: String, bots: Int, address: String?) {
@@ -133,6 +145,12 @@ class AppState(
                     p.client.send(p.request)
                 }
                 "hosted" -> {
+                    if (p.kind == "wifijoin") {
+                        // We became alone in a brand-new room: nobody is hosting at that address.
+                        onlineStatus = "No game is running at that address yet. Ask your friend to tap HOST ON WI-FI first."
+                        cancelOnline()
+                        return
+                    }
                     pending = null
                     onlineBusy = false
                     startOnline(OnlineRoom(p.client, f.optString("code"), true, bots = p.bots, address = p.address))

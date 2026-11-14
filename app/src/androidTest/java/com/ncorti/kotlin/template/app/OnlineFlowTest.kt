@@ -243,6 +243,8 @@ class OnlineFlowTest {
         assumeTrue("device has a Wi-Fi style address", com.ncorti.kotlin.template.app.net.LocalRelay.localAddress() != null)
         click("ONLINE")
         waitFor("HOST ON WI-FI") // no server saved, so the Wi-Fi tab is shown
+        val myIp = com.ncorti.kotlin.template.app.net.LocalRelay.localAddress()!!
+        assertTrue("host panel shows this phone's address ($myIp) before starting", device.wait(Until.hasObject(By.textContains(myIp)), 10_000))
         shot("24_wifi_tab")
         click("HOST ON WI-FI")
         waitFor("BOOST")
@@ -254,7 +256,7 @@ class OnlineFlowTest {
         val client = RelayClient("127.0.0.1:${com.ncorti.kotlin.template.app.net.LocalRelay.DEFAULT_PORT}")
         client.connect()
         await(client, "_open")
-        client.send(JSONObject().put("t", "join").put("code", room.code).put("name", "Bro"))
+        client.send(JSONObject().put("t", "quick").put("name", "Bro")) // address only, no room code
         await(client, "joined")
         val world = World(Random(1), 0, false, Skins.all[2], ambientFood = 0)
         val logic = GuestLogic(
@@ -278,6 +280,20 @@ class OnlineFlowTest {
         assertEquals("host counts the guest", 1, onApp { it.session!!.peerCount })
         shot("25_wifi_hosting")
         client.close()
+    }
+
+    @Test
+    fun joiningAWifiAddressWhereNobodyHostsExplainsWhy() {
+        val relay = com.ncorti.kotlin.template.app.net.LocalRelay(0)
+        relay.start()
+        try {
+            click("ONLINE")
+            waitFor("JOIN ON WI-FI")
+            onApp { it.joinOnWifi("127.0.0.1:${relay.port}") }
+            assertTrue("explains nobody is hosting", device.wait(Until.hasObject(By.textContains("No game is running")), 15_000))
+        } finally {
+            relay.stop()
+        }
     }
 
     @Test

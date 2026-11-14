@@ -25,10 +25,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ncorti.kotlin.template.app.AppState
 import com.ncorti.kotlin.template.app.game.Cfg
+import com.ncorti.kotlin.template.app.net.LocalRelay
 import kotlinx.coroutines.delay
 
 /** Play with friends (room code) or strangers (quick match) through a relay server. */
@@ -47,6 +49,15 @@ fun OnlineScreen(app: AppState) {
         }
     }
     DisposableEffect(Unit) { onDispose { app.cancelOnline() } }
+
+    // This phone's Wi-Fi address, refreshed in case the Wi-Fi changes while the screen is open.
+    var myAddress by remember { mutableStateOf(LocalRelay.localAddress()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            myAddress = LocalRelay.localAddress()
+            delay(2000)
+        }
+    }
 
     ScreenFrame("Play Online", onBack = { app.cancelOnline(); app.back() }) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -70,11 +81,16 @@ fun OnlineScreen(app: AppState) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Panel(Modifier.weight(1f)) {
                 Text("HOST ON THIS PHONE", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
-                Text(
-                    "No server needed. Your friend must be on the same Wi-Fi, or connected to your hotspot.",
-                    color = Neon.Dim,
-                    fontSize = 12.sp,
-                )
+                if (myAddress == null) {
+                    Text(
+                        "Not on Wi-Fi yet. Connect to Wi-Fi, or switch on your hotspot, then come back here.",
+                        color = Neon.Pink,
+                        fontSize = 12.sp,
+                    )
+                } else {
+                    Text("Your address. Tell your friend to type this:", color = Neon.Dim, fontSize = 12.sp)
+                    Text(myAddress!!, color = Neon.Lime, fontWeight = FontWeight.Black, fontSize = 26.sp)
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Add ${Cfg.ONLINE_BOTS} bots", color = Neon.Text, modifier = Modifier.weight(1f))
                     Switch(checked = withBots, onCheckedChange = { withBots = it })
@@ -92,31 +108,23 @@ fun OnlineScreen(app: AppState) {
                     value = s.lanHost,
                     onValueChange = { s.updateLanHost(it) },
                     singleLine = true,
-                    label = { Text("Host's address") },
+                    label = { Text("Your friend's address") },
                     placeholder = { Text("e.g. 192.168.1.5") },
-                    colors = fieldColors(),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = code,
-                    onValueChange = { code = it.filter { c -> c.isLetterOrDigit() }.take(4).uppercase() },
-                    singleLine = true,
-                    placeholder = { Text("CODE") },
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = fieldColors(),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 NeonButton(
                     "JOIN ON WI-FI",
-                    { app.connectOnline("join", code = code, url = s.lanHost) },
+                    { app.joinOnWifi(s.lanHost) },
                     Modifier.fillMaxWidth().height(48.dp),
-                    primary = code.length == 4 && s.lanHost.isNotBlank(),
+                    primary = s.lanHost.isNotBlank(),
                 )
             }
         }
         Text(
-            "After you tap HOST ON WI-FI, the game shows your address and room code at the top. " +
-                "Your friend types both here.",
+            "Don't know your address? The host's phone shows it above, so nobody has to look it up. " +
+                "No Wi-Fi? Turn on one phone's hotspot and connect the other phone to it.",
             color = Neon.Dim,
             fontSize = 11.sp,
         )

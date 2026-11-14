@@ -222,8 +222,8 @@ fun GameScreen(app: AppState, session: GameSession) {
             session.room?.let { room ->
                 val peers = if (room.isHost) session.peerCount + 1 else null
                 Text(
-                    "ROOM ${room.code}" + (if (peers != null) "  ·  $peers online" else "") +
-                        (if (room.address != null) "  ·  ${room.address}" else ""),
+                    (if (room.address != null) "WI-FI ${room.address}" else "ROOM ${room.code}") +
+                        (if (peers != null) "  ·  $peers online" else ""),
                     color = Neon.Cyan,
                     fontWeight = FontWeight.Black,
                     fontSize = 12.sp,
