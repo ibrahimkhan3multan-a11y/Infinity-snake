@@ -303,7 +303,12 @@ class GameFlowTest {
             if (speed > Cfg.BASE_SPEED * 1.2f) break
             pad(500)
         }
-        assertTrue("average speed while boosting $speed should exceed base ${Cfg.BASE_SPEED}", speed > Cfg.BASE_SPEED * 1.2f)
+        val dbg = onApp { app, _ ->
+            val s = app.session!!
+            val p = s.world.player
+            "alive=${p.alive} paused=${s.paused} pos=(${p.xs[0]},${p.ys[0]}) angle=${p.angle} target=${p.targetAngle} input=${s.input.angle} slow=${p.slow} energy=${p.energy} boostActive=${p.boostActive} time=${s.world.time}"
+        }
+        assertTrue("average speed while boosting $speed should exceed base ${Cfg.BASE_SPEED}; $dbg", speed > Cfg.BASE_SPEED * 1.2f)
         val after = onApp { app, _ -> app.session!!.world.player.mass }
         assertTrue("boost must not burn length ($massBefore -> $after)", after >= massBefore - 0.01f)
         assertFalse("boost released", onApp { app, _ -> app.session!!.input.touchBoost })
