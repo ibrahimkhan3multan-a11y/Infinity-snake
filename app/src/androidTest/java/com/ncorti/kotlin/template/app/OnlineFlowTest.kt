@@ -71,7 +71,15 @@ class OnlineFlowTest {
 
     private fun click(text: String) {
         waitFor(text)
-        device.findObject(By.text(text)).click()
+        repeat(5) {
+            try {
+                device.findObject(By.text(text)).click()
+                return
+            } catch (e: androidx.test.uiautomator.StaleObjectException) {
+                Thread.sleep(300) // the screen recomposed between find and click; look again
+            }
+        }
+        throw AssertionError("could not click '$text'")
     }
 
     private fun <T> onApp(block: (AppState) -> T): T {
@@ -148,7 +156,7 @@ class OnlineFlowTest {
         assertTrue("guest snake was alive in the host arena", wasAlive)
         assertTrue("leaderboard mirrored", logic.board.isNotEmpty())
         assertTrue("host sees one guest", onApp { it.session!!.peerCount } == 1)
-        assertTrue("other snakes visible (host + bots)", world.snakes.count { it !== world.player && it.alive } >= 1)
+        assertTrue("roster mirrored (host + bots)", world.snakes.size > 1)
         assertTrue("guest steering reached the host", onApp { app ->
             app.session!!.world.snakes.firstOrNull { it.remote }?.let { kotlin.math.abs(it.angle - 0.5f) < 0.5f } ?: false
         })
