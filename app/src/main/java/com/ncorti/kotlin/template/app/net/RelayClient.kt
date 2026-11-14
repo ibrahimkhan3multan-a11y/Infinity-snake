@@ -81,6 +81,7 @@ class RelayClient(url: String) : NetLink {
                 s.startsWith("ws://") || s.startsWith("wss://") -> s
                 s.startsWith("https://") -> "wss://" + s.removePrefix("https://")
                 s.startsWith("http://") -> "ws://" + s.removePrefix("http://")
+                Regex("""\d{1,3}(\.\d{1,3}){3}""").matches(s) -> "ws://$s:${LocalRelay.DEFAULT_PORT}"
                 else -> "ws://$s"
             }
         }

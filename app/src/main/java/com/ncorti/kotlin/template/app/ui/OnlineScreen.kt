@@ -37,6 +37,8 @@ fun OnlineScreen(app: AppState) {
     val s = app.settings
     var code by remember { mutableStateOf("") }
     var withBots by remember { mutableStateOf(true) }
+    // Without a saved server the Wi-Fi tab is the useful one.
+    var wifiTab by remember { mutableStateOf(s.serverUrl.isBlank()) }
 
     LaunchedEffect(app.onlineBusy) {
         while (app.onlineBusy) {
@@ -47,6 +49,78 @@ fun OnlineScreen(app: AppState) {
     DisposableEffect(Unit) { onDispose { app.cancelOnline() } }
 
     ScreenFrame("Play Online", onBack = { app.cancelOnline(); app.back() }) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            NeonButton("SAME WI-FI", { wifiTab = true }, Modifier.height(40.dp), primary = wifiTab, accent = Neon.Cyan)
+            NeonButton("SERVER", { wifiTab = false }, Modifier.height(40.dp), primary = !wifiTab, accent = Neon.Cyan)
+        }
+        Text(
+            app.onlineStatus.ifEmpty {
+                if (wifiTab) "Play with someone next to you. Nothing is sent over the internet."
+                else "Rooms run on the host's phone; the server only passes codes and messages."
+            },
+            color = when {
+                app.onlineBusy -> Neon.Cyan
+                app.onlineStatus.isNotEmpty() -> Neon.Pink
+                else -> Neon.Dim
+            },
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+        )
+        if (wifiTab) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Panel(Modifier.weight(1f)) {
+                Text("HOST ON THIS PHONE", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
+                Text(
+                    "No server needed. Your friend must be on the same Wi-Fi, or connected to your hotspot.",
+                    color = Neon.Dim,
+                    fontSize = 12.sp,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Add ${Cfg.ONLINE_BOTS} bots", color = Neon.Text, modifier = Modifier.weight(1f))
+                    Switch(checked = withBots, onCheckedChange = { withBots = it })
+                }
+                NeonButton(
+                    "HOST ON WI-FI",
+                    { app.hostOnWifi(if (withBots) Cfg.ONLINE_BOTS else 0) },
+                    Modifier.fillMaxWidth().height(48.dp),
+                    accent = Neon.Lime,
+                )
+            }
+            Panel(Modifier.weight(1f)) {
+                Text("JOIN A FRIEND ON WI-FI", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
+                OutlinedTextField(
+                    value = s.lanHost,
+                    onValueChange = { s.updateLanHost(it) },
+                    singleLine = true,
+                    label = { Text("Host's address") },
+                    placeholder = { Text("e.g. 192.168.1.5") },
+                    colors = fieldColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it.filter { c -> c.isLetterOrDigit() }.take(4).uppercase() },
+                    singleLine = true,
+                    placeholder = { Text("CODE") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+                    colors = fieldColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                NeonButton(
+                    "JOIN ON WI-FI",
+                    { app.connectOnline("join", code = code, url = s.lanHost) },
+                    Modifier.fillMaxWidth().height(48.dp),
+                    primary = code.length == 4 && s.lanHost.isNotBlank(),
+                )
+            }
+        }
+        Text(
+            "After you tap HOST ON WI-FI, the game shows your address and room code at the top. " +
+                "Your friend types both here.",
+            color = Neon.Dim,
+            fontSize = 11.sp,
+        )
+        } else {
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -64,16 +138,6 @@ fun OnlineScreen(app: AppState) {
             Text("Bots", color = Neon.Text, fontWeight = FontWeight.SemiBold)
             Switch(checked = withBots, onCheckedChange = { withBots = it })
         }
-        Text(
-            app.onlineStatus.ifEmpty { "Rooms run on the host's phone; the server only passes codes and messages." },
-            color = when {
-                app.onlineBusy -> Neon.Cyan
-                app.onlineStatus.isNotEmpty() -> Neon.Pink
-                else -> Neon.Dim
-            },
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp,
-        )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Panel(Modifier.weight(1f)) {
                 Text("PLAY WITH FRIENDS", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
@@ -119,6 +183,7 @@ fun OnlineScreen(app: AppState) {
             color = Neon.Dim,
             fontSize = 11.sp,
         )
+        }
     }
 }
 

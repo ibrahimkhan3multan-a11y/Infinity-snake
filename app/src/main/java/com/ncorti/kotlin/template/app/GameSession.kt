@@ -35,6 +35,8 @@ class OnlineRoom(
     val code: String,
     val isHost: Boolean,
     val bots: Int = 0,
+    /** Hosting on Wi-Fi: the address friends type to join (shown in the room label). */
+    val address: String? = null,
     /** Guests only: the introduction sent to the host (skin, upgrade levels). */
     val hello: JSONObject? = null,
 )

@@ -69,6 +69,9 @@ class Settings(context: Context) {
 
     /** Address of the relay server used for online rooms (empty until the player enters one). */
     var serverUrl by mutableStateOf(sp.getString("server", "") ?: "")
+
+    /** Last Wi-Fi host address typed when joining a friend on the same network. */
+    var lanHost by mutableStateOf(sp.getString("lan", "") ?: "")
         private set
 
     fun updateName(v: String) {
@@ -125,6 +128,7 @@ class Settings(context: Context) {
     fun updateWalls(v: Boolean) { walls = v; sp.edit().putBoolean("walls", v).apply() }
     fun updateSensitivity(v: Float) { sensitivity = v; sp.edit().putFloat("sensitivity", v).apply() }
     fun updateQuality(v: Int) { quality = v; sp.edit().putInt("quality", v).apply() }
+    fun updateLanHost(v: String) { lanHost = v.trim(); sp.edit().putString("lan", lanHost).apply() }
     fun updateServerUrl(v: String) { serverUrl = v.trim(); sp.edit().putString("server", serverUrl).apply() }
     fun updateControlMode(v: Int) { controlMode = v; sp.edit().putInt("control", v).apply() }
 

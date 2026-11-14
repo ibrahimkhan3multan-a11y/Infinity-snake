@@ -239,6 +239,48 @@ class OnlineFlowTest {
     }
 
     @Test
+    fun appHostsOnWifiWithoutAnyServerAndAGuestJoinsItsAddress() {
+        assumeTrue("device has a Wi-Fi style address", com.ncorti.kotlin.template.app.net.LocalRelay.localAddress() != null)
+        click("ONLINE")
+        waitFor("HOST ON WI-FI") // no server saved, so the Wi-Fi tab is shown
+        shot("24_wifi_tab")
+        click("HOST ON WI-FI")
+        waitFor("BOOST")
+        val room = onApp { it.session!!.room!! }
+        assertTrue("address shown for friends: ${room.address}", !room.address.isNullOrEmpty())
+        assertTrue("room label shows address", device.wait(Until.hasObject(By.textContains(room.address!!)), 10_000))
+
+        // The guest connects the way a second phone would, by address (here via localhost on the same device).
+        val client = RelayClient("127.0.0.1:${com.ncorti.kotlin.template.app.net.LocalRelay.DEFAULT_PORT}")
+        client.connect()
+        await(client, "_open")
+        client.send(JSONObject().put("t", "join").put("code", room.code).put("name", "Bro"))
+        await(client, "joined")
+        val world = World(Random(1), 0, false, Skins.all[2], ambientFood = 0)
+        val logic = GuestLogic(
+            world, client,
+            Protocol.hello("Bro", Skins.all[2].head, Skins.all[2].tail, false, false, 0, IntArray(5)),
+            object : GuestLogic.Listener {
+                override fun onKilled(victim: String) {}
+                override fun onOver(score: Int, rank: Int, length: Int, kills: Int) {}
+                override fun onRespawned() {}
+            },
+        )
+        logic.sendHello()
+        val end = System.currentTimeMillis() + 4_000
+        while (System.currentTimeMillis() < end) {
+            while (true) logic.handle(client.inbox.poll() ?: break)
+            logic.update(0.016f)
+            logic.sendInput(0f, false, 0.016f)
+            Thread.sleep(16)
+        }
+        assertTrue("snapshots over the phone's own relay: ${logic.snapshots}", logic.snapshots > 20)
+        assertEquals("host counts the guest", 1, onApp { it.session!!.peerCount })
+        shot("25_wifi_hosting")
+        client.close()
+    }
+
+    @Test
     fun joiningAnUnknownCodeShowsAnError() {
         onApp { it.settings.updateServerUrl(server) }
         click("ONLINE")
