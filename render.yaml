@@ -1,0 +1,10 @@
+# One-click setup for Render (https://render.com): New > Blueprint > pick this repo.
+services:
+  - type: web
+    name: infinity-snake-relay
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: echo "nothing to build"
+    startCommand: node relay.js
+    healthCheckPath: /health

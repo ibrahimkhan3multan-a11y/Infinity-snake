@@ -34,6 +34,16 @@ Rooms hold up to 8 players. Everyone starts at the same size. If the host leaves
 
 Address forms that work: `192.168.1.20:8080`, `my-relay.onrender.com`, `ws://host:8080`, `wss://host`.
 
+## Easiest: Render from a phone (no computer needed)
+
+1. In your phone's browser open render.com and sign up with your GitHub account.
+2. Tap **New +**, then **Blueprint**, and choose the `Infinity-snake` repository (the `render.yaml` in the project root sets everything up).
+3. Tap **Apply** / **Deploy** and wait a few minutes until the service says **Live**.
+4. Copy the address shown at the top of the service page (like `infinity-snake-relay.onrender.com`).
+5. In the game: ONLINE, paste it into **Server address**, then Create Room. Friends enter the same address and your 4-letter code.
+
+The free plan sleeps when idle, so the first connection after a break may take about 30 seconds.
+
 ## Where to host it
 
 Pick whichever is easiest; the relay is just a Node process that listens on `$PORT`.
