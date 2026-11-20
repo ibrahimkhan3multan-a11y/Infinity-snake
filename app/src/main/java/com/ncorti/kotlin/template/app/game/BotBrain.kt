@@ -68,21 +68,31 @@ object BotBrain {
             var bx = 0f
             var by = 0f
             var bd = 0f
-            for (i in 0 until Cfg.FOOD_CAP) {
-                if (!w.falive[i]) continue
-                val dx = w.fx[i] - hx
-                val dy = w.fy[i] - hy
-                val d2 = dx * dx + dy * dy
-                if (d2 > range2) continue
-                val d = sqrt(d2)
-                val ahead = ((dx * ca + dy * sa) / (d + 0.001f)).coerceIn(-1f, 1f)
-                val base = if (level == 0) 1f / (d + 20f) else (w.fv[i] + 0.5f) / (d + 70f)
-                val sc = base * (0.55f + 0.45f * ahead)
-                if (sc > bestScore) {
-                    bestScore = sc
-                    bx = w.fx[i]
-                    by = w.fy[i]
-                    bd = d
+            val x0 = World.cellCoord(hx - range)
+            val x1 = World.cellCoord(hx + range)
+            val y0 = World.cellCoord(hy - range)
+            val y1 = World.cellCoord(hy + range)
+            for (cy in y0..y1) {
+                for (cx in x0..x1) {
+                    var i = w.cellHead[cy * World.GRID_N + cx]
+                    while (i >= 0) {
+                        val dx = w.fx[i] - hx
+                        val dy = w.fy[i] - hy
+                        val d2 = dx * dx + dy * dy
+                        if (d2 <= range2) {
+                            val d = sqrt(d2)
+                            val ahead = ((dx * ca + dy * sa) / (d + 0.001f)).coerceIn(-1f, 1f)
+                            val base = if (level == 0) 1f / (d + 20f) else (w.fv[i] + 0.5f) / (d + 70f)
+                            val sc = base * (0.55f + 0.45f * ahead)
+                            if (sc > bestScore) {
+                                bestScore = sc
+                                bx = w.fx[i]
+                                by = w.fy[i]
+                                bd = d
+                            }
+                        }
+                        i = w.fnext[i]
+                    }
                 }
             }
             if (bestScore >= 0f) {

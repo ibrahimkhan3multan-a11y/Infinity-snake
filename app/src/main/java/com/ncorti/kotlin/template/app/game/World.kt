@@ -38,6 +38,12 @@ class World(
     var aliveFood = 0
         private set
     private val freeStack = IntArray(Cfg.FOOD_CAP)
+
+    // Spatial index: food items chained per grid cell, so eating and bot searches only look nearby.
+    val cellHead = IntArray(GRID_N * GRID_N) { -1 }
+    val fnext = IntArray(Cfg.FOOD_CAP)
+    private val fprev = IntArray(Cfg.FOOD_CAP)
+    private val fcell = IntArray(Cfg.FOOD_CAP)
     private var freeTop = 0
     private var recycleCursor = 0
 
@@ -149,7 +155,10 @@ class World(
         } else {
             val i = recycleCursor
             recycleCursor = (recycleCursor + 1) % Cfg.FOOD_CAP
-            if (falive[i]) aliveFood--
+            if (falive[i]) {
+                aliveFood--
+                unlinkFood(i)
+            }
             i
         }
         fx[idx] = x
@@ -158,9 +167,28 @@ class World(
         fcol[idx] = color
         falive[idx] = true
         aliveFood++
+        linkFood(idx)
+    }
+
+    private fun linkFood(i: Int) {
+        val c = cellCoord(fy[i]) * GRID_N + cellCoord(fx[i])
+        fcell[i] = c
+        val head = cellHead[c]
+        fprev[i] = -1
+        fnext[i] = head
+        if (head >= 0) fprev[head] = i
+        cellHead[c] = i
+    }
+
+    private fun unlinkFood(i: Int) {
+        val p = fprev[i]
+        val n = fnext[i]
+        if (p >= 0) fnext[p] = n else cellHead[fcell[i]] = n
+        if (n >= 0) fprev[n] = p
     }
 
     private fun removeFood(i: Int) {
+        unlinkFood(i)
         falive[i] = false
         aliveFood--
         freeStack[freeTop++] = i
@@ -198,15 +226,26 @@ class World(
         val hx = s.xs[0]
         val hy = s.ys[0]
         val reach = s.radius + 16f + (if (s.magnet > 0f) Cfg.MAGNET_REACH else 0f)
-        for (i in 0 until Cfg.FOOD_CAP) {
-            if (!falive[i]) continue
-            val dx = fx[i] - hx
-            val dy = fy[i] - hy
-            val rr = reach + foodRadius(fv[i])
-            if (dx * dx + dy * dy < rr * rr) {
-                s.mass += fv[i]
-                removeFood(i)
-                listener?.onFoodEaten(s)
+        val far = reach + 14f // the biggest food radius is 13.5
+        val x0 = cellCoord(hx - far)
+        val x1 = cellCoord(hx + far)
+        val y0 = cellCoord(hy - far)
+        val y1 = cellCoord(hy + far)
+        for (cy in y0..y1) {
+            for (cx in x0..x1) {
+                var i = cellHead[cy * GRID_N + cx]
+                while (i >= 0) {
+                    val next = fnext[i]
+                    val dx = fx[i] - hx
+                    val dy = fy[i] - hy
+                    val rr = reach + foodRadius(fv[i])
+                    if (dx * dx + dy * dy < rr * rr) {
+                        s.mass += fv[i]
+                        removeFood(i)
+                        listener?.onFoodEaten(s)
+                    }
+                    i = next
+                }
             }
         }
     }
@@ -448,6 +487,13 @@ class World(
     }
 
     companion object {
+        const val CELL = 160f
+        val GRID_N = ((Cfg.ARENA_RADIUS * 2f + 400f) / CELL).toInt() + 1
+        private val GRID_OFF = Cfg.ARENA_RADIUS + 200f
+
+        /** Grid column or row for a world coordinate, clamped to the grid. */
+        fun cellCoord(v: Float): Int = ((v + GRID_OFF) / CELL).toInt().coerceIn(0, GRID_N - 1)
+
         const val NONE = -2
         const val WALL = -1
 

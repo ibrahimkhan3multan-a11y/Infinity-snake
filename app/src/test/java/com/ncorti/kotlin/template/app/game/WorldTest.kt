@@ -352,4 +352,39 @@ class WorldTest {
         val w = World(Random(9), botCount = Cfg.BOT_COUNT, deadlyWalls = false, playerSkin = skin)
         w.snakes.filter { !it.isPlayer }.forEach { assertEquals(Cfg.START_MASS, it.mass, 0.01f) }
     }
+
+    /** Counts food reachable through the spatial grid chains. */
+    private fun chained(w: World): Int {
+        var n = 0
+        for (c in w.cellHead.indices) {
+            var i = w.cellHead[c]
+            while (i >= 0) {
+                assertTrue("chained food must be alive", w.falive[i])
+                n++
+                i = w.fnext[i]
+            }
+        }
+        return n
+    }
+
+    @Test
+    fun foodGridStaysConsistentThroughEatingAndRecycling() {
+        val w = emptyWorld(seed = 5)
+        val rnd = Random(3)
+        // Overfill so old items get recycled, then let the player eat a patch.
+        repeat(Cfg.FOOD_CAP + 500) {
+            val a = rnd.nextFloat() * TWO_PI
+            val d = rnd.nextFloat() * (Cfg.ARENA_RADIUS - 50f)
+            w.addFood(kotlin.math.cos(a) * d, kotlin.math.sin(a) * d, 1f + rnd.nextInt(3), 0xFFFFFFFF.toInt())
+        }
+        assertEquals(w.aliveFood, chained(w))
+        w.player.place(0f, 0f, 0f, 10f)
+        w.player.grace = 1_000_000f
+        repeat(240) {
+            w.addFood(rnd.nextFloat() * 100f, rnd.nextFloat() * 100f, 2f, 0xFFFFFFFF.toInt())
+            w.step(Cfg.STEP)
+        }
+        assertEquals(w.aliveFood, chained(w))
+        assertTrue("player ate food in range", w.player.mass > 10f)
+    }
 }
