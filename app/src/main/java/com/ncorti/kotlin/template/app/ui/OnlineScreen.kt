@@ -48,7 +48,21 @@ fun OnlineScreen(app: AppState) {
             delay(50)
         }
     }
-    DisposableEffect(Unit) { onDispose { app.cancelOnline() } }
+    DisposableEffect(Unit) {
+        app.startScan()
+        onDispose {
+            app.stopScan()
+            app.cancelOnline()
+        }
+    }
+    // Friends who are hosting on this Wi-Fi right now.
+    var nearby by remember { mutableStateOf(emptyList<com.ncorti.kotlin.template.app.net.FoundHost>()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nearby = app.foundHosts()
+            delay(1000)
+        }
+    }
 
     // This phone's Wi-Fi address, refreshed in case the Wi-Fi changes while the screen is open.
     var myAddress by remember { mutableStateOf(LocalRelay.localAddress()) }
@@ -104,6 +118,18 @@ fun OnlineScreen(app: AppState) {
             }
             Panel(Modifier.weight(1f)) {
                 Text("JOIN A FRIEND ON WI-FI", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
+                if (nearby.isEmpty()) {
+                    Text("Looking for friends nearby…", color = Neon.Dim, fontSize = 12.sp)
+                } else {
+                    nearby.take(2).forEach { h ->
+                        NeonButton(
+                            "JOIN ${h.name.uppercase()}",
+                            { app.joinOnWifi(h.address) },
+                            Modifier.fillMaxWidth().height(44.dp),
+                            accent = Neon.Lime,
+                        )
+                    }
+                }
                 OutlinedTextField(
                     value = s.lanHost,
                     onValueChange = { s.updateLanHost(it) },
@@ -123,7 +149,7 @@ fun OnlineScreen(app: AppState) {
             }
         }
         Text(
-            "Don't know your address? The host's phone shows it above, so nobody has to look it up. " +
+            "Your friend appears here by name once they tap HOST. If not, type the address shown on their phone. " +
                 "No Wi-Fi? Turn on one phone's hotspot and connect the other phone to it.",
             color = Neon.Dim,
             fontSize = 11.sp,

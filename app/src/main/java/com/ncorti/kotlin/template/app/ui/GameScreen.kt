@@ -462,9 +462,9 @@ private fun MiniStat(label: String, value: String) {
 private fun Minimap(session: GameSession) {
     Canvas(
         Modifier
-            .size(84.dp)
+            .size(96.dp)
             .clip(CircleShape)
-            .background(Color(0x66000000)),
+            .background(Color(0x88100A22)),
     ) {
         @Suppress("UNUSED_VARIABLE")
         val tick = session.frame
@@ -473,6 +473,11 @@ private fun Minimap(session: GameSession) {
         val k = rad / Cfg.ARENA_RADIUS
         drawCircle(Neon.Pink.copy(alpha = 0.8f), rad, c, style = Stroke(2.dp.toPx()))
         val world = session.world
+        // The area currently on screen.
+        val vw = session.viewW / session.zoom * k
+        val vh = session.viewH / session.zoom * k
+        val cp = Offset(c.x + session.camX * k, c.y + session.camY * k)
+        drawRect(Color.White.copy(alpha = 0.35f), Offset(cp.x - vw / 2f, cp.y - vh / 2f), androidx.compose.ui.geometry.Size(vw, vh), style = Stroke(1.dp.toPx()))
         for (i in 0 until world.snakes.size) {
             val s = world.snakes[i]
             if (!s.alive || s.isPlayer) continue

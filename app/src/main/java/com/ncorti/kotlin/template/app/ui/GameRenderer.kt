@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.nativeCanvas
 import com.ncorti.kotlin.template.app.GameSession
 import com.ncorti.kotlin.template.app.game.Cfg
@@ -32,6 +33,8 @@ class GameRenderer {
     private val outsideColor = Color(0xFF05030B)
     private val gridColor = Color(0xFF241A3F)
     private val borderColor = Color(0xFFFF3DAA)
+    private val dotColor = Color(0xFF3A2B66)
+    private val arenaClip = androidx.compose.ui.graphics.Path()
 
     fun draw(ds: DrawScope, s: GameSession, quality: Int) {
         with(ds) {
@@ -45,50 +48,73 @@ class GameRenderer {
             val world = s.world
             val time = world.time
 
-            // Arena floor.
-            drawRect(arenaColor)
+            // Deep space behind the arena, with two layers of drifting stars.
+            drawRect(outsideColor)
+            if (quality >= 1) drawStars(w, h, s.camX, s.camY, time, if (quality >= 2) 70 else 36)
 
-            // Grid.
+            // Arena floor: a soft glowing disc, lighter in the middle.
+            val arenaR = Cfg.ARENA_RADIUS * zoom
+            val centre = Offset(ox, oy)
+            drawCircle(arenaColor, arenaR, centre)
+            drawCircle(
+                Brush.radialGradient(
+                    colorStops = arrayOf(0f to Color(0xFF241647), 0.7f to Color(0x00110B22), 1f to Color(0x00110B22)),
+                    center = centre,
+                    radius = arenaR,
+                ),
+                arenaR,
+                centre,
+            )
+
+            // Grid, clipped to the arena so it never leaks into space.
             val grid = 140f
             val left = s.camX - w / 2f / zoom
             val right = s.camX + w / 2f / zoom
             val top = s.camY - h / 2f / zoom
             val bottom = s.camY + h / 2f / zoom
-            var gx = kotlin.math.floor(left / grid) * grid
-            while (gx <= right) {
-                val sx = ox + gx * zoom
-                drawLine(gridColor, Offset(sx, 0f), Offset(sx, h), 1f)
-                gx += grid
-            }
-            var gy = kotlin.math.floor(top / grid) * grid
-            while (gy <= bottom) {
-                val sy = oy + gy * zoom
-                drawLine(gridColor, Offset(0f, sy), Offset(w, sy), 1f)
-                gy += grid
-            }
-
-            // Everything beyond the arena edge is covered by a huge ring stroke.
-            val ringWidth = 6000f * zoom
-            drawCircle(
-                outsideColor,
-                radius = Cfg.ARENA_RADIUS * zoom + ringWidth / 2f,
-                center = Offset(ox, oy),
-                style = Stroke(width = ringWidth),
-            )
-            if (quality >= 1) {
+            clipPath(arenaClip.also { it.rewind(); it.addOval(androidx.compose.ui.geometry.Rect(centre, arenaR)) }) {
+                var gx = kotlin.math.floor(left / grid) * grid
+                while (gx <= right) {
+                    val sx = ox + gx * zoom
+                    drawLine(gridColor, Offset(sx, 0f), Offset(sx, h), 1f)
+                    gx += grid
+                }
+                var gy = kotlin.math.floor(top / grid) * grid
+                while (gy <= bottom) {
+                    val sy = oy + gy * zoom
+                    drawLine(gridColor, Offset(0f, sy), Offset(w, sy), 1f)
+                    gy += grid
+                }
+                if (quality >= 1) {
+                    gx = kotlin.math.floor(left / grid) * grid
+                    while (gx <= right) {
+                        gy = kotlin.math.floor(top / grid) * grid
+                        while (gy <= bottom) {
+                            drawCircle(dotColor, 2.2f * zoom + 0.8f, Offset(ox + gx * zoom, oy + gy * zoom))
+                            gy += grid
+                        }
+                        gx += grid
+                    }
+                }
+                // Danger zone: the last stretch before the wall glows red.
                 drawCircle(
-                    borderColor.copy(alpha = 0.22f),
-                    radius = Cfg.ARENA_RADIUS * zoom,
-                    center = Offset(ox, oy),
-                    style = Stroke(width = maxOf(10f, 30f * zoom)),
+                    Brush.radialGradient(
+                        colorStops = arrayOf(0f to Color.Transparent, 0.9f to Color.Transparent, 1f to Color(0x66FF2D6F)),
+                        center = centre,
+                        radius = arenaR,
+                    ),
+                    arenaR,
+                    centre,
                 )
             }
-            drawCircle(
-                borderColor,
-                radius = Cfg.ARENA_RADIUS * zoom,
-                center = Offset(ox, oy),
-                style = Stroke(width = maxOf(2f, 7f * zoom)),
-            )
+
+            // Wall: wide soft glow plus a bright pulsing line.
+            if (quality >= 1) {
+                drawCircle(borderColor.copy(alpha = 0.16f), arenaR, centre, style = Stroke(width = maxOf(14f, 46f * zoom)))
+                drawCircle(borderColor.copy(alpha = 0.28f), arenaR, centre, style = Stroke(width = maxOf(8f, 22f * zoom)))
+            }
+            val pulse = 0.8f + 0.2f * sin(time * 3f)
+            drawCircle(borderColor.copy(alpha = pulse), arenaR, centre, style = Stroke(width = maxOf(2f, 7f * zoom)))
 
             // Food.
             val m = 40f
@@ -103,6 +129,7 @@ class GameRenderer {
                 val col = Color(world.fcol[i])
                 if (quality >= 1) drawCircle(col.copy(alpha = 0.22f), rad * 2.3f, Offset(x, y))
                 drawCircle(col, rad, Offset(x, y))
+                if (quality >= 2) drawCircle(Color.White.copy(alpha = 0.55f), rad * 0.32f, Offset(x - rad * 0.28f, y - rad * 0.28f))
             }
 
             // Snakes (tail first so heads end up on top).
@@ -131,7 +158,11 @@ class GameRenderer {
                     val col = if (sn.rainbow) Color.hsv((i * 7f + time * 90f) % 360f, 0.75f, 1f) else mix(head, tail, t)
                     val taper = if (t > 0.85f) 1f - (t - 0.85f) * 2f else 1f
                     if (glowOn && (i and 1) == 0) drawCircle(col.copy(alpha = 0.16f * a), r * taper * 1.9f, Offset(x, y))
-                    drawCircle(if (a < 1f) col.copy(alpha = a) else col, r * taper, Offset(x, y))
+                    val seg = if (quality >= 1 && (i / 3) % 2 == 1) shade(col, 0.88f) else col
+                    drawCircle(if (a < 1f) seg.copy(alpha = a) else seg, r * taper, Offset(x, y))
+                    if (quality >= 2 && (i and 1) == 0) {
+                        drawCircle(Color.White.copy(alpha = 0.16f * a), r * taper * 0.45f, Offset(x - r * 0.25f, y - r * 0.3f))
+                    }
                     i--
                 }
 
@@ -146,12 +177,12 @@ class GameRenderer {
                     drawCircle(Color(0xFFFF3DAA).copy(alpha = 0.5f), mr, Offset(hx, hy), style = Stroke(2f))
                 }
                 if (sn.freeze > 0f) {
-            val fr = Cfg.FREEZE_RADIUS * zoom
-            drawCircle(Color(0xFF9BE7FF).copy(alpha = 0.06f), fr, Offset(hx, hy))
-            drawCircle(Color(0xFF9BE7FF).copy(alpha = 0.5f), fr, Offset(hx, hy), style = Stroke(2f))
-        }
-        if (sn.slow > 0f) drawCircle(Color(0xFF9BE7FF).copy(alpha = 0.35f), r * 1.7f, Offset(hx, hy))
-        if (sn.overdrive > 0f) drawCircle(Color(0xFFFFD45C).copy(alpha = 0.3f), r * 3.2f, Offset(hx, hy))
+                    val fr = Cfg.FREEZE_RADIUS * zoom
+                    drawCircle(Color(0xFF9BE7FF).copy(alpha = 0.06f), fr, Offset(hx, hy))
+                    drawCircle(Color(0xFF9BE7FF).copy(alpha = 0.5f), fr, Offset(hx, hy), style = Stroke(2f))
+                }
+                if (sn.slow > 0f) drawCircle(Color(0xFF9BE7FF).copy(alpha = 0.35f), r * 1.7f, Offset(hx, hy))
+                if (sn.overdrive > 0f) drawCircle(Color(0xFFFFD45C).copy(alpha = 0.3f), r * 3.2f, Offset(hx, hy))
                 if (sn.shield > 0f) {
                     val flicker = if (sn.shield < 1.5f && ((time * 10f).toInt() and 1) == 0) 0.35f else 1f
                     drawCircle(Color(0xFF2DE2E6).copy(alpha = 0.16f * flicker), r * 2.4f, Offset(hx, hy))
@@ -167,7 +198,8 @@ class GameRenderer {
                     val ex = hx + ca * fwd - sa * side * sign
                     val ey = hy + sa * fwd + ca * side * sign
                     drawCircle(Color.White, eyeR, Offset(ex, ey))
-                    drawCircle(Color.Black, eyeR * 0.5f, Offset(ex + ca * eyeR * 0.35f, ey + sa * eyeR * 0.35f))
+                    drawCircle(Color(0xFF111122), eyeR * 0.58f, Offset(ex + ca * eyeR * 0.35f, ey + sa * eyeR * 0.35f))
+                    if (quality >= 1) drawCircle(Color.White, eyeR * 0.18f, Offset(ex + ca * eyeR * 0.5f - sa * eyeR * 0.2f, ey + sa * eyeR * 0.5f + ca * eyeR * 0.2f))
                     sign += 2f
                 }
                 if (!sn.isPlayer && quality >= 1) {
@@ -200,6 +232,23 @@ class GameRenderer {
                 }
                 drawRect(vignette!!)
             }
+        }
+    }
+
+    private fun shade(c: Color, k: Float) = Color(c.red * k, c.green * k, c.blue * k, c.alpha)
+
+    /** Cheap deterministic star field in screen space; two layers drift at different speeds. */
+    private fun DrawScope.drawStars(w: Float, h: Float, camX: Float, camY: Float, time: Float, count: Int) {
+        for (i in 0 until count) {
+            val layer = if (i % 3 == 0) 0.12f else 0.05f
+            val bx = (i * 7919 % 1000) / 1000f * w * 1.4f
+            val by = (i * 6271 % 1000) / 1000f * h * 1.4f
+            var x = (bx - camX * layer) % (w * 1.4f)
+            var y = (by - camY * layer) % (h * 1.4f)
+            if (x < 0) x += w * 1.4f
+            if (y < 0) y += h * 1.4f
+            val tw = 0.5f + 0.5f * sin(time * 1.5f + i)
+            drawCircle(Color.White.copy(alpha = 0.18f + 0.35f * tw), if (i % 3 == 0) 2.2f else 1.3f, Offset(x - w * 0.2f, y - h * 0.2f))
         }
     }
 }

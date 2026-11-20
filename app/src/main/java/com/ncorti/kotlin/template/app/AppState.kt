@@ -10,6 +10,8 @@ import com.ncorti.kotlin.template.app.audio.Sfx
 import com.ncorti.kotlin.template.app.data.Settings
 import com.ncorti.kotlin.template.app.game.Powers
 import com.ncorti.kotlin.template.app.game.Skins
+import com.ncorti.kotlin.template.app.net.FoundHost
+import com.ncorti.kotlin.template.app.net.LanDiscovery
 import com.ncorti.kotlin.template.app.net.LocalRelay
 import com.ncorti.kotlin.template.app.net.Protocol
 import com.ncorti.kotlin.template.app.net.RelayClient
@@ -48,6 +50,8 @@ class AppState(
 
     private var pending: Pending? = null
     private var lan: LocalRelay? = null
+    private var announcer: LanDiscovery.Announcer? = null
+    private var scanner: LanDiscovery.Listener? = null
 
     /** What the Online screen shows while connecting, or why the last attempt failed. */
     var onlineStatus by mutableStateOf("")
@@ -90,6 +94,7 @@ class AppState(
             }
         }
         lan = relay
+        announcer = LanDiscovery.Announcer(settings.playerName, relay.port).also { it.start() }
         // A public room, so a friend only needs this phone's address (no room code) to get in.
         val request = JSONObject().put("name", settings.playerName).put("t", "quick")
         val address = if (relay.port == LocalRelay.DEFAULT_PORT) ip else "$ip:${relay.port}"
@@ -121,7 +126,22 @@ class AppState(
         client.connect()
     }
 
+    /** Starts listening for friends hosting on this Wi-Fi (join screen). */
+    fun startScan() {
+        if (scanner != null) return
+        scanner = LanDiscovery.Listener(ownAddress = { LocalRelay.localAddress() }).also { it.start() }
+    }
+
+    fun stopScan() {
+        scanner?.stop()
+        scanner = null
+    }
+
+    fun foundHosts(): List<FoundHost> = scanner?.hosts() ?: emptyList()
+
     private fun stopLan() {
+        announcer?.stop()
+        announcer = null
         lan?.stop()
         lan = null
     }

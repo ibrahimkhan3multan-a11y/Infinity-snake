@@ -7,7 +7,7 @@ const val TWO_PI = 6.2831855f
 
 /** Tunable constants for the arena simulation. World units are abstract "pixels". */
 object Cfg {
-    const val ARENA_RADIUS = 2600f
+    const val ARENA_RADIUS = 4200f
     const val STEP = 1f / 60f
     const val BASE_SPEED = 170f
     const val BOOST_SPEED = 300f
@@ -28,12 +28,12 @@ object Cfg {
     const val SEGS_PER_MASS = 0.55f
     const val MAX_SEGS = 600
     const val START_MASS = 10f
-    const val FOOD_CAP = 2000
-    const val AMBIENT_FOOD = 1100
+    const val FOOD_CAP = 4200
+    const val AMBIENT_FOOD = 2600
     const val SPAWN_GRACE = 2.5f
     const val BOARD_SIZE = 6
-    const val BOT_COUNT = 14
-    const val ONLINE_BOTS = 6
+    const val BOT_COUNT = 22
+    const val ONLINE_BOTS = 10
 }
 
 /** Visual and pickup radius of a food item with the given value. */
