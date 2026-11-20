@@ -32,7 +32,8 @@ class LanDiscoveryTest {
             }
             assertTrue("host should be found", found.isNotEmpty())
             assertEquals("Brother", found[0].name)
-            assertEquals("127.0.0.1", found[0].address)
+            // The packet may arrive from loopback or the runner's own address, so only check it is a plain IPv4.
+            assertTrue(found[0].address.matches(Regex("\\d+\\.\\d+\\.\\d+\\.\\d+")))
         } finally {
             announcer.stop()
             listener.stop()
