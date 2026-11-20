@@ -6,7 +6,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.nativeCanvas
 import com.ncorti.kotlin.template.app.GameSession
 import com.ncorti.kotlin.template.app.game.Cfg
@@ -34,7 +33,6 @@ class GameRenderer {
     private val gridColor = Color(0xFF241A3F)
     private val borderColor = Color(0xFFFF3DAA)
     private val dotColor = Color(0xFF3A2B66)
-    private val arenaClip = androidx.compose.ui.graphics.Path()
 
     fun draw(ds: DrawScope, s: GameSession, quality: Int) {
         with(ds) {
@@ -48,14 +46,11 @@ class GameRenderer {
             val world = s.world
             val time = world.time
 
-            // Deep space behind the arena, with two layers of drifting stars.
-            drawRect(outsideColor)
-            if (quality >= 1) drawStars(w, h, s.camX, s.camY, time, if (quality >= 2) 70 else 36)
-
-            // Arena floor: a soft glowing disc, lighter in the middle.
             val arenaR = Cfg.ARENA_RADIUS * zoom
             val centre = Offset(ox, oy)
-            drawCircle(arenaColor, arenaR, centre)
+
+            // Arena floor: flat colour with a soft lighter glow in the middle.
+            drawRect(arenaColor)
             drawCircle(
                 Brush.radialGradient(
                     colorStops = arrayOf(0f to Color(0xFF241647), 0.7f to Color(0x00110B22), 1f to Color(0x00110B22)),
@@ -66,47 +61,56 @@ class GameRenderer {
                 centre,
             )
 
-            // Grid, clipped to the arena so it never leaks into space.
+            // Grid (the space ring below hides whatever spills past the wall).
             val grid = 140f
             val left = s.camX - w / 2f / zoom
             val right = s.camX + w / 2f / zoom
             val top = s.camY - h / 2f / zoom
             val bottom = s.camY + h / 2f / zoom
-            clipPath(arenaClip.also { it.rewind(); it.addOval(androidx.compose.ui.geometry.Rect(centre, arenaR)) }) {
-                var gx = kotlin.math.floor(left / grid) * grid
+            var gx = kotlin.math.floor(left / grid) * grid
+            while (gx <= right) {
+                val sx = ox + gx * zoom
+                drawLine(gridColor, Offset(sx, 0f), Offset(sx, h), 1f)
+                gx += grid
+            }
+            var gy = kotlin.math.floor(top / grid) * grid
+            while (gy <= bottom) {
+                val sy = oy + gy * zoom
+                drawLine(gridColor, Offset(0f, sy), Offset(w, sy), 1f)
+                gy += grid
+            }
+            if (quality >= 2) {
+                gx = kotlin.math.floor(left / grid) * grid
                 while (gx <= right) {
-                    val sx = ox + gx * zoom
-                    drawLine(gridColor, Offset(sx, 0f), Offset(sx, h), 1f)
+                    gy = kotlin.math.floor(top / grid) * grid
+                    while (gy <= bottom) {
+                        drawCircle(dotColor, 2.2f * zoom + 0.8f, Offset(ox + gx * zoom, oy + gy * zoom))
+                        gy += grid
+                    }
                     gx += grid
                 }
-                var gy = kotlin.math.floor(top / grid) * grid
-                while (gy <= bottom) {
-                    val sy = oy + gy * zoom
-                    drawLine(gridColor, Offset(0f, sy), Offset(w, sy), 1f)
-                    gy += grid
-                }
-                if (quality >= 1) {
-                    gx = kotlin.math.floor(left / grid) * grid
-                    while (gx <= right) {
-                        gy = kotlin.math.floor(top / grid) * grid
-                        while (gy <= bottom) {
-                            drawCircle(dotColor, 2.2f * zoom + 0.8f, Offset(ox + gx * zoom, oy + gy * zoom))
-                            gy += grid
-                        }
-                        gx += grid
-                    }
-                }
-                // Danger zone: the last stretch before the wall glows red.
-                drawCircle(
-                    Brush.radialGradient(
-                        colorStops = arrayOf(0f to Color.Transparent, 0.9f to Color.Transparent, 1f to Color(0x66FF2D6F)),
-                        center = centre,
-                        radius = arenaR,
-                    ),
-                    arenaR,
-                    centre,
-                )
             }
+
+            // Danger zone: the last stretch before the wall glows red (bounded by the circle itself).
+            drawCircle(
+                Brush.radialGradient(
+                    colorStops = arrayOf(0f to Color.Transparent, 0.92f to Color.Transparent, 1f to Color(0x66FF2D6F)),
+                    center = centre,
+                    radius = arenaR,
+                ),
+                arenaR,
+                centre,
+            )
+
+            // Everything beyond the wall: deep space, covered by one huge ring, with drifting stars on top.
+            val ringWidth = 9000f * zoom
+            drawCircle(
+                outsideColor,
+                radius = arenaR + ringWidth / 2f,
+                center = centre,
+                style = Stroke(width = ringWidth),
+            )
+            if (quality >= 1) drawStars(w, h, s.camX, s.camY, time, if (quality >= 2) 70 else 36, centre, arenaR)
 
             // Wall: wide soft glow plus a bright pulsing line.
             if (quality >= 1) {
@@ -238,7 +242,7 @@ class GameRenderer {
     private fun shade(c: Color, k: Float) = Color(c.red * k, c.green * k, c.blue * k, c.alpha)
 
     /** Cheap deterministic star field in screen space; two layers drift at different speeds. */
-    private fun DrawScope.drawStars(w: Float, h: Float, camX: Float, camY: Float, time: Float, count: Int) {
+    private fun DrawScope.drawStars(w: Float, h: Float, camX: Float, camY: Float, time: Float, count: Int, centre: Offset, arenaR: Float) {
         for (i in 0 until count) {
             val layer = if (i % 3 == 0) 0.12f else 0.05f
             val bx = (i * 7919 % 1000) / 1000f * w * 1.4f
@@ -247,8 +251,11 @@ class GameRenderer {
             var y = (by - camY * layer) % (h * 1.4f)
             if (x < 0) x += w * 1.4f
             if (y < 0) y += h * 1.4f
+            val px = x - w * 0.2f
+            val py = y - h * 0.2f
+            if (kotlin.math.hypot(px - centre.x, py - centre.y) < arenaR) continue
             val tw = 0.5f + 0.5f * sin(time * 1.5f + i)
-            drawCircle(Color.White.copy(alpha = 0.18f + 0.35f * tw), if (i % 3 == 0) 2.2f else 1.3f, Offset(x - w * 0.2f, y - h * 0.2f))
+            drawCircle(Color.White.copy(alpha = 0.18f + 0.35f * tw), if (i % 3 == 0) 2.2f else 1.3f, Offset(px, py))
         }
     }
 }
