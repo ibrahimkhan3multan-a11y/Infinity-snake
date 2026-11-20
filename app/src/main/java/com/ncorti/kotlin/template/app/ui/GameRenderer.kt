@@ -51,15 +51,17 @@ class GameRenderer {
 
             // Arena floor: flat colour with a soft lighter glow in the middle.
             drawRect(arenaColor)
-            drawCircle(
-                Brush.radialGradient(
-                    colorStops = arrayOf(0f to Color(0xFF241647), 0.7f to Color(0x00110B22), 1f to Color(0x00110B22)),
-                    center = centre,
-                    radius = arenaR,
-                ),
-                arenaR,
-                centre,
-            )
+            if (quality >= 2) {
+                drawCircle(
+                    Brush.radialGradient(
+                        colorStops = arrayOf(0f to Color(0xFF241647), 0.7f to Color(0x00110B22), 1f to Color(0x00110B22)),
+                        center = centre,
+                        radius = arenaR,
+                    ),
+                    arenaR,
+                    centre,
+                )
+            }
 
             // Grid (the space ring below hides whatever spills past the wall).
             val grid = 140f
@@ -91,16 +93,20 @@ class GameRenderer {
                 }
             }
 
-            // Danger zone: the last stretch before the wall glows red (bounded by the circle itself).
-            drawCircle(
-                Brush.radialGradient(
-                    colorStops = arrayOf(0f to Color.Transparent, 0.92f to Color.Transparent, 1f to Color(0x66FF2D6F)),
-                    center = centre,
-                    radius = arenaR,
-                ),
-                arenaR,
-                centre,
-            )
+            // Danger zone: the last stretch before the wall glows red.
+            if (quality >= 2) {
+                drawCircle(
+                    Brush.radialGradient(
+                        colorStops = arrayOf(0f to Color.Transparent, 0.92f to Color.Transparent, 1f to Color(0x66FF2D6F)),
+                        center = centre,
+                        radius = arenaR,
+                    ),
+                    arenaR,
+                    centre,
+                )
+            } else if (quality == 1) {
+                drawCircle(Color(0x22FF2D6F), arenaR - 120f * zoom, centre, style = Stroke(width = 240f * zoom))
+            }
 
             // Everything beyond the wall: deep space, covered by one huge ring, with drifting stars on top.
             val ringWidth = 9000f * zoom
@@ -110,13 +116,11 @@ class GameRenderer {
                 center = centre,
                 style = Stroke(width = ringWidth),
             )
-            if (quality >= 1) drawStars(w, h, s.camX, s.camY, time, if (quality >= 2) 70 else 36, centre, arenaR)
+            if (quality >= 2) drawStars(w, h, s.camX, s.camY, time, 70, centre, arenaR)
 
             // Wall: wide soft glow plus a bright pulsing line.
-            if (quality >= 1) {
-                drawCircle(borderColor.copy(alpha = 0.16f), arenaR, centre, style = Stroke(width = maxOf(14f, 46f * zoom)))
-                drawCircle(borderColor.copy(alpha = 0.28f), arenaR, centre, style = Stroke(width = maxOf(8f, 22f * zoom)))
-            }
+            if (quality >= 1) drawCircle(borderColor.copy(alpha = 0.22f), arenaR, centre, style = Stroke(width = maxOf(10f, 30f * zoom)))
+            if (quality >= 2) drawCircle(borderColor.copy(alpha = 0.14f), arenaR, centre, style = Stroke(width = maxOf(14f, 56f * zoom)))
             val pulse = 0.8f + 0.2f * sin(time * 3f)
             drawCircle(borderColor.copy(alpha = pulse), arenaR, centre, style = Stroke(width = maxOf(2f, 7f * zoom)))
 
