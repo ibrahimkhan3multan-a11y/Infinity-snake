@@ -59,7 +59,23 @@ object Powers {
         70, 0f, 0f, 60f, 25f,
     )
 
-    val all: List<Power> = listOf(SHIELD, MAGNET, OVERDRIVE, FREEZE, RECHARGE)
+    val FEAST = Power(
+        "feast", "Feast",
+        "Every pellet you eat is worth double while it lasts.",
+        85, 6f, 14f, 40f, 20f,
+    )
+    val DASH = Power(
+        "dash", "Dash",
+        "A sudden burst of speed that needs no energy and can't be slowed.",
+        65, 1.2f, 3f, 20f, 10f,
+    )
+    val VACUUM = Power(
+        "vacuum", "Vacuum",
+        "Sucks up every pellet in a huge circle around you.",
+        75, 0.6f, 1.5f, 45f, 20f,
+    )
+
+    val all: List<Power> = listOf(SHIELD, MAGNET, OVERDRIVE, FREEZE, RECHARGE, FEAST, DASH, VACUUM)
     val inGame: List<Power> = all
 
     fun byId(id: String): Power? = all.firstOrNull { it.id == id }

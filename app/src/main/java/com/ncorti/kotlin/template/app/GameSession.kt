@@ -14,6 +14,7 @@ import com.ncorti.kotlin.template.app.game.Particles
 import com.ncorti.kotlin.template.app.game.Power
 import com.ncorti.kotlin.template.app.game.PowerState
 import com.ncorti.kotlin.template.app.game.Powers
+import com.ncorti.kotlin.template.app.game.RunStats
 import com.ncorti.kotlin.template.app.game.Skins
 import com.ncorti.kotlin.template.app.game.Snake
 import com.ncorti.kotlin.template.app.game.TWO_PI
@@ -105,7 +106,10 @@ class GameSession(
         GuestLogic(
             world, room!!.client, room.hello!!,
             object : GuestLogic.Listener {
-                override fun onKilled(victim: String) = showBanner("You eliminated $victim!", Sfx.KILL)
+                override fun onKilled(victim: String) {
+                    guestKills++
+                    showBanner("You eliminated $victim!", Sfx.KILL)
+                }
                 override fun onOver(score: Int, rank: Int, length: Int, kills: Int) = finalizeWith(score, rank, length, kills)
                 override fun onRespawned() = resetAfterRespawn()
             },
@@ -113,6 +117,12 @@ class GameSession(
     } else {
         null
     }
+
+    // Counters for the quests; reset on every new life.
+    private var guestKills = 0
+    private var foodEaten = 0
+    private var powersUsed = 0
+    private var aliveTime = 0f
 
     /** Set when the connection to the room is lost: a message to show. */
     var disconnected by mutableStateOf<String?>(null)
@@ -181,6 +191,7 @@ class GameSession(
         val me = world.player
         me.maxEnergy = Powers.tankCapacity(settings.tankLevel)
         me.energy = me.maxEnergy
+        if (settings.devBigStart && guest == null) me.mass = 400f
         input.angle = world.player.angle
         camX = world.player.xs[0]
         camY = world.player.ys[0]
@@ -210,6 +221,9 @@ class GameSession(
             p.turnMul = settings.sensitivity
         }
 
+        if (p.alive && !paused) aliveTime += dt
+        powers.noCooldown = settings.devNoCooldown
+        if (settings.devGod && p.alive) p.shield = maxOf(p.shield, 5f)
         host?.beforeStep()
         acc += dt
         var steps = 0
@@ -287,9 +301,18 @@ class GameSession(
         while (true) {
             val f = client.inbox.poll() ?: break
             when (f.optString("t")) {
-                "_closed" -> disconnected = if (disconnected == null) "Connection lost" else disconnected
-                "closed" -> disconnected = "The host left the room"
-                "error" -> disconnected = f.optString("msg", "Error")
+                "_closed" -> {
+                    disconnected = if (disconnected == null) "Connection lost" else disconnected
+                    payoutUnfinished()
+                }
+                "closed" -> {
+                    disconnected = "The host left the room"
+                    payoutUnfinished()
+                }
+                "error" -> {
+                    disconnected = f.optString("msg", "Error")
+                    payoutUnfinished()
+                }
                 else -> {
                     host?.handle(f)
                     guest?.handle(f)
@@ -307,7 +330,11 @@ class GameSession(
         }
         val before = g.snapshots
         g.sendInput(input.angle, input.touchBoost || input.keyBoost, dt)
-        if (g.update(dt)) app.audio.playEat()
+        if (g.update(dt)) {
+            foodEaten++
+            app.audio.playEat()
+        }
+        if (p.alive && !paused) aliveTime += dt
         if (before == 0 && g.snapshots > 0) camInit = false
         particles.update(dt)
         updateCamera(dt, p)
@@ -343,6 +370,10 @@ class GameSession(
     /** A guest asks the host for a fresh snake after elimination. */
     private fun resetAfterRespawn() {
         finalized = false
+        guestKills = 0
+        foodEaten = 0
+        powersUsed = 0
+        aliveTime = 0f
         overTimer = -1f
         over = false
         result = null
@@ -365,8 +396,21 @@ class GameSession(
         hudEnergy = 1f
     }
 
+    /**
+     * Pays out a run that was still going when the room ended (host left, connection lost, or you
+     * left): you keep coins for your size and eliminations instead of losing them.
+     */
+    private fun payoutUnfinished() {
+        if (finalized || room == null) return
+        val p = world.player
+        if (!p.alive) return
+        val g = guest
+        if (g != null) finalizeWith(g.score, g.rank, maxOf(p.n, g.length), maxOf(guestKills, p.kills)) else finalizeRun(p)
+    }
+
     /** Leaves the room and drops the connection. */
     fun close() {
+        payoutUnfinished()
         room?.client?.close()
     }
 
@@ -438,6 +482,7 @@ class GameSession(
             if (!powers.use(p, power, level)) return
             refreshHud()
         }
+        powersUsed++
         hudPowerTick++
         app.audio.play(
             when (power.id) {
@@ -490,6 +535,7 @@ class GameSession(
         val previousBest = settings.highScore
         val earned = settings.recordRun(score, rank, solo, kills)
         val completed = settings.applyChallenges(score, kills, rank, solo)
+        settings.recordQuests(RunStats(score, kills, foodEaten, powersUsed, aliveTime.toInt(), isOnline))
         result = RunResult(
             score = score,
             best = settings.highScore,
@@ -510,6 +556,7 @@ class GameSession(
 
     override fun onFoodEaten(snake: Snake) {
         if (!snake.isPlayer) return
+        foodEaten++
         if (settings.quality > 0) {
             particles.burst(snake.xs[0], snake.ys[0], snake.headColor, 2, 90f, 3f, rnd)
         }

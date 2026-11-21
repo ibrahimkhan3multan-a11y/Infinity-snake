@@ -163,12 +163,15 @@ class GuestLogic(
                 s.overdrive = if (e.optBoolean(7)) 1f else 0f
                 s.freeze = if (e.optBoolean(8)) 1f else 0f
                 s.slow = if (e.optBoolean(9)) 1f else 0f
+                s.feast = if (e.optBoolean(10)) 1f else 0f
+                s.dash = if (e.optBoolean(11)) 1f else 0f
+                s.vacuum = if (e.optBoolean(12)) 1f else 0f
                 if (id == meId) {
                     s.glow = flags and Protocol.F_GLOW != 0
                     s.rainbow = flags and Protocol.F_RAINBOW != 0
                 }
                 val n = e.optInt(4).coerceIn(0, Cfg.MAX_SEGS)
-                val pts = e.optJSONArray(10)
+                val pts = e.optJSONArray(13)
                 if (isAlive && pts != null && n > 0) {
                     Protocol.unpackBody(n, pts, g.tx, g.ty)
                     if (g.fresh || g.tn == 0 || far(s, g)) {

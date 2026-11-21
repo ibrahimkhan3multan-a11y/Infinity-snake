@@ -8,6 +8,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ncorti.kotlin.template.app.game.Challenge
 import com.ncorti.kotlin.template.app.game.Challenges
+import com.ncorti.kotlin.template.app.game.Codes
+import com.ncorti.kotlin.template.app.game.Quest
+import com.ncorti.kotlin.template.app.game.Quests
+import com.ncorti.kotlin.template.app.game.RunStats
 import com.ncorti.kotlin.template.app.game.Power
 import com.ncorti.kotlin.template.app.game.Powers
 import com.ncorti.kotlin.template.app.game.Skins
@@ -192,6 +196,185 @@ class Settings(context: Context) {
             .apply()
         return earned
     }
+
+
+    // ---------------------------------------------------------------- daily quests
+
+    /** Day number the saved quest progress belongs to. */
+    private var questDay by mutableIntStateOf(sp.getInt("quest_day", -1))
+    private var questProgress by mutableStateOf(parseMap(sp.getString("quest_prog", "")))
+    private var questClaimed by mutableStateOf(parseSet(sp.getString("quest_claimed", ""), addDefaults = false))
+    private var questBonusTaken by mutableStateOf(sp.getBoolean("quest_bonus", false))
+
+    fun dailyQuests(): List<Quest> = Quests.forDay(today())
+
+    private fun rollQuestDay() {
+        if (questDay == today()) return
+        questDay = today()
+        questProgress = emptyMap()
+        questClaimed = emptySet()
+        questBonusTaken = false
+        saveQuests()
+    }
+
+    private fun saveQuests() {
+        sp.edit()
+            .putInt("quest_day", questDay)
+            .putString("quest_prog", questProgress.entries.joinToString(",") { "${it.key}:${it.value}" })
+            .putString("quest_claimed", questClaimed.joinToString(","))
+            .putBoolean("quest_bonus", questBonusTaken)
+            .apply()
+    }
+
+    fun questProgressOf(q: Quest): Int = if (questDay == today()) questProgress[q.id] ?: 0 else 0
+    fun questDone(q: Quest): Boolean = questProgressOf(q) >= q.goal
+    fun questClaimed(q: Quest): Boolean = questDay == today() && q.id in questClaimed
+    fun questsClaimable(): Int = dailyQuests().count { questDone(it) && !questClaimed(it) }
+    fun allQuestsClaimed(): Boolean = dailyQuests().all { questClaimed(it) }
+    fun bonusTaken(): Boolean = questDay == today() && questBonusTaken
+
+    /** Adds a finished run to today's quests. */
+    fun recordQuests(run: RunStats) {
+        rollQuestDay()
+        val map = questProgress.toMutableMap()
+        for (q in dailyQuests()) map[q.id] = q.after(map[q.id] ?: 0, run)
+        questProgress = map
+        saveQuests()
+    }
+
+    /** Pays out a finished quest. Returns the coins granted (0 if not done or already claimed). */
+    fun claimQuest(q: Quest): Int {
+        rollQuestDay()
+        if (!questDone(q) || q.id in questClaimed) return 0
+        questClaimed = questClaimed + q.id
+        coins += q.reward
+        var granted = q.reward
+        if (!questBonusTaken && dailyQuests().all { it.id in questClaimed }) {
+            questBonusTaken = true
+            coins += Quests.ALL_DONE_BONUS
+            granted += Quests.ALL_DONE_BONUS
+        }
+        sp.edit().putInt("coins", coins).apply()
+        saveQuests()
+        return granted
+    }
+
+    // ---------------------------------------------------------------- redeem codes
+
+    var redeemedNames by mutableStateOf((sp.getString("redeemed_codes", "") ?: "").split(",").filter { it.isNotEmpty() }.toSet())
+        private set
+
+    sealed class Redeem {
+        class Ok(val text: String) : Redeem()
+        object Used : Redeem()
+        object Invalid : Redeem()
+        object Secret : Redeem()
+    }
+
+    fun redeem(raw: String): Redeem {
+        if (Codes.isSecret(raw)) return Redeem.Secret
+        val code = Codes.normalize(raw)
+        val reward = Codes.find(raw) ?: return Redeem.Invalid
+        if (code in redeemedNames) return Redeem.Used
+        redeemedNames = redeemedNames + code
+        coins += reward.coins
+        reward.skin?.let { unlocked = unlocked + it }
+        reward.power?.let { id ->
+            if (powerLevel(id) == 0) {
+                powers = powers + (id to 1)
+                sp.edit().putInt("plevel_$id", 1).apply()
+            }
+        }
+        sp.edit()
+            .putString("redeemed_codes", redeemedNames.joinToString(","))
+            .putInt("coins", coins)
+            .putString("unlocked", unlocked.joinToString(","))
+            .apply()
+        return Redeem.Ok(reward.text)
+    }
+
+    // ---------------------------------------------------------------- tester menu
+
+    /** Tester options. Only the tester menu can turn these on. */
+    var devNoCooldown by mutableStateOf(sp.getBoolean("dev_nocd", false))
+        private set
+    var devGod by mutableStateOf(sp.getBoolean("dev_god", false))
+        private set
+    var devBigStart by mutableStateOf(sp.getBoolean("dev_big", false))
+        private set
+
+    fun devSetNoCooldown(v: Boolean) { devNoCooldown = v; sp.edit().putBoolean("dev_nocd", v).apply() }
+    fun devSetGod(v: Boolean) { devGod = v; sp.edit().putBoolean("dev_god", v).apply() }
+    fun devSetBigStart(v: Boolean) { devBigStart = v; sp.edit().putBoolean("dev_big", v).apply() }
+
+    fun devAddCoins(n: Int) {
+        coins = (coins + n).coerceAtLeast(0)
+        sp.edit().putInt("coins", coins).apply()
+    }
+
+    fun devSetCoins(n: Int) {
+        coins = n.coerceAtLeast(0)
+        sp.edit().putInt("coins", coins).apply()
+    }
+
+    fun devUnlockAllSkins() {
+        unlocked = Skins.all.map { it.id }.toSet()
+        sp.edit().putString("unlocked", unlocked.joinToString(",")).apply()
+    }
+
+    fun devLockSkins() {
+        unlocked = setOf(0, 1)
+        selectedSkin = 0
+        sp.edit().putString("unlocked", "0,1").putInt("skin", 0).apply()
+    }
+
+    fun devSetAllPowers(level: Int) {
+        powers = Powers.all.associate { it.id to level.coerceIn(0, Powers.MAX_LEVEL) }
+        tankLevel = if (level > 0) Powers.TANK_MAX else 0
+        val ed = sp.edit().putInt("tank", tankLevel)
+        for ((id, l) in powers) ed.putInt("plevel_$id", l)
+        ed.apply()
+    }
+
+    /** Makes today's quests brand new and unclaimed, or finishes them all. */
+    fun devQuests(complete: Boolean) {
+        questDay = today()
+        questClaimed = emptySet()
+        questBonusTaken = false
+        questProgress = if (complete) dailyQuests().associate { it.id to it.goal } else emptyMap()
+        saveQuests()
+    }
+
+    fun devResetDailyReward() {
+        dailyDay = -1
+        sp.edit().putInt("daily_day", -1).apply()
+    }
+
+    fun devResetCodes() {
+        redeemedNames = emptySet()
+        sp.edit().putString("redeemed_codes", "").apply()
+    }
+
+    fun devResetChallenges() {
+        challengeDone = emptySet()
+        challengeBest = Challenges.all.associate { it.id to 0 }
+        val ed = sp.edit().putString("ch_done", "")
+        for (c in Challenges.all) ed.putInt("ch_best_${c.id}", 0)
+        ed.apply()
+    }
+
+    fun devSetHighScore(n: Int) {
+        highScore = n.coerceAtLeast(0)
+        sp.edit().putInt("high_score", highScore).apply()
+    }
+
+    private fun parseMap(csv: String?): Map<Int, Int> =
+        csv.orEmpty().split(",").mapNotNull {
+            val p = it.split(":")
+            val k = p.getOrNull(0)?.toIntOrNull()
+            val v = p.getOrNull(1)?.toIntOrNull()
+            if (k != null && v != null) k to v else null
+        }.toMap()
 
     private fun parseSet(csv: String?, addDefaults: Boolean = true): Set<Int> {
         val set = csv.orEmpty().split(",").mapNotNull { it.trim().toIntOrNull() }.toMutableSet()

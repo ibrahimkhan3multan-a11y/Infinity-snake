@@ -387,4 +387,64 @@ class WorldTest {
         assertEquals(w.aliveFood, chained(w))
         assertTrue("player ate food in range", w.player.mass > 10f)
     }
+
+    @Test
+    fun feastDoublesFoodValue() {
+        val plain = emptyWorld()
+        plain.player.place(0f, 0f, 0f, 10f)
+        plain.player.grace = 1_000_000f
+        plain.addFood(5f, 0f, 3f, 0xFFFFFFFF.toInt())
+        plain.step(Cfg.STEP)
+        val feast = emptyWorld()
+        feast.player.place(0f, 0f, 0f, 10f)
+        feast.player.grace = 1_000_000f
+        feast.player.feast = 5f
+        feast.addFood(5f, 0f, 3f, 0xFFFFFFFF.toInt())
+        feast.step(Cfg.STEP)
+        assertEquals(0, plain.aliveFood)
+        assertEquals(0, feast.aliveFood)
+        assertEquals("double food", (plain.player.mass - 10f) * 2f, feast.player.mass - 10f, 0.01f)
+    }
+
+    @Test
+    fun vacuumReachesFarFood() {
+        val w = emptyWorld()
+        w.player.place(0f, 0f, 0f, 10f)
+        w.player.grace = 1_000_000f
+        w.addFood(0f, 330f, 2f, 0xFFFFFFFF.toInt())
+        w.step(Cfg.STEP)
+        assertEquals("out of normal reach", 1, w.aliveFood)
+        w.player.vacuum = 1f
+        w.step(Cfg.STEP)
+        assertEquals("vacuum reaches it", 0, w.aliveFood)
+    }
+
+    @Test
+    fun dashIsFasterThanBoostAndNeedsNoEnergy() {
+        val w = emptyWorld()
+        w.player.place(0f, 0f, 0f, 10f)
+        w.player.grace = 1_000_000f
+        w.player.energy = 0f
+        w.player.dash = 1f
+        val x0 = w.player.xs[0]
+        w.run(0.5f)
+        val speed = (w.player.xs[0] - x0) / 0.5f
+        assertTrue("dash speed $speed should beat boost ${Cfg.BOOST_SPEED}", speed > Cfg.BOOST_SPEED * 1.2f)
+        assertEquals("dash is free", 0f, w.player.energy, 0.5f)
+    }
+
+    @Test
+    fun newPowersUseAndRespectCooldowns() {
+        val w = emptyWorld()
+        w.player.place(0f, 0f, 0f, 10f)
+        val kit = PowerState()
+        for (p in listOf(Powers.FEAST, Powers.DASH, Powers.VACUUM)) {
+            assertTrue(kit.use(w.player, p, 1))
+            assertTrue(kit.isActive(w.player, p))
+            assertTrue("cooling down", !kit.ready(w.player, p, 1))
+        }
+        kit.noCooldown = true
+        w.player.feast = 0f
+        assertTrue("tester mode ignores cooldown", kit.use(w.player, Powers.FEAST, 1))
+    }
 }

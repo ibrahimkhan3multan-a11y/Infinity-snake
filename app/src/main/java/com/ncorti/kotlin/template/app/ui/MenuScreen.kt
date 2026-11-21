@@ -263,11 +263,15 @@ private fun FloatingIcon(kind: Ico, tint: Color, modifier: Modifier) {
 
 @Composable
 private fun EventCarousel(app: AppState, modifier: Modifier) {
-    val pages = Challenges.all.size + 1
+    val pages = Challenges.all.size + 2
     val pager = rememberPagerState(pageCount = { pages })
     Box(modifier) {
         HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
-            if (page < Challenges.all.size) ChallengeCard(app, Challenges.all[page]) else DailyCard(app)
+            when {
+                page == 0 -> QuestsCard(app)
+                page <= Challenges.all.size -> ChallengeCard(app, Challenges.all[page - 1])
+                else -> DailyCard(app)
+            }
         }
         Row(
             Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp),
@@ -332,6 +336,35 @@ private fun ChallengeCard(app: AppState, c: Challenge) {
                 }
                 Text("Best so far: $best / ${c.goal}", color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
             }
+        }
+    }
+}
+
+@Composable
+private fun QuestsCard(app: AppState) {
+    val s = app.settings
+    val quests = s.dailyQuests()
+    val claimable = s.questsClaimable()
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(18.dp))
+            .background(cardBrushes[2])
+            .padding(16.dp),
+    ) {
+        FloatingIcon(Ico.TARGET, Color.White.copy(alpha = 0.25f), Modifier.align(Alignment.CenterEnd).padding(end = 24.dp))
+        Column(Modifier.align(Alignment.CenterStart).fillMaxWidth(0.66f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text("DAILY QUESTS", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+            quests.forEach { q ->
+                val mark = if (s.questClaimed(q)) "✓" else if (s.questDone(q)) "!" else "${s.questProgressOf(q)}/${q.goal}"
+                Text("$mark  ${q.desc}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+            NeonButton(
+                if (claimable > 0) "CLAIM $claimable REWARD${if (claimable > 1) "S" else ""}" else "OPEN QUESTS",
+                { app.open(Screen.QUESTS) },
+                Modifier.width(220.dp).height(40.dp),
+                accent = if (claimable > 0) Neon.Lime else Color(0xFFFFD45C),
+            )
         }
     }
 }

@@ -225,7 +225,9 @@ class World(
     private fun eatFood(s: Snake) {
         val hx = s.xs[0]
         val hy = s.ys[0]
-        val reach = s.radius + 16f + (if (s.magnet > 0f) Cfg.MAGNET_REACH else 0f)
+        val reach = s.radius + 16f + (if (s.magnet > 0f) Cfg.MAGNET_REACH else 0f) +
+            (if (s.vacuum > 0f) Cfg.VACUUM_REACH else 0f)
+        val worth = if (s.feast > 0f) 2f else 1f
         val far = reach + 14f // the biggest food radius is 13.5
         val x0 = cellCoord(hx - far)
         val x1 = cellCoord(hx + far)
@@ -240,7 +242,7 @@ class World(
                     val dy = fy[i] - hy
                     val rr = reach + foodRadius(fv[i])
                     if (dx * dx + dy * dy < rr * rr) {
-                        s.mass += fv[i]
+                        s.mass += fv[i] * worth
                         removeFood(i)
                         listener?.onFoodEaten(s)
                     }

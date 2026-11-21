@@ -239,6 +239,78 @@ class OnlineFlowTest {
     }
 
     @Test
+    fun whenTheHostLeavesTheGuestStillGetsCoinsForSizeAndKills() {
+        onApp { it.settings.updateServerUrl(server) }
+        val hostClient = connectClient()
+        hostClient.send(JSONObject().put("t", "host").put("name", "Hosty").put("public", false))
+        val code = await(hostClient, "hosted").getString("code")
+        val hostWorld = World(Random(7), 0, false, Skins.all[1])
+        val host = HostLogic(hostWorld, hostClient)
+        hostWorld.listener = object : WorldListener {
+            override fun onSnakeDied(snake: Snake, killer: Snake?) = host.snakeDied(snake, killer)
+        }
+        val running = java.util.concurrent.atomic.AtomicBoolean(true)
+        val loop = Thread {
+            var last = System.nanoTime()
+            var acc = 0f
+            while (running.get()) {
+                val now = System.nanoTime()
+                val dt = ((now - last) / 1e9f).coerceAtMost(0.1f)
+                last = now
+                while (true) host.handle(hostClient.inbox.poll() ?: break)
+                host.beforeStep()
+                acc += dt
+                while (acc >= Cfg.STEP) {
+                    hostWorld.step(Cfg.STEP)
+                    acc -= Cfg.STEP
+                }
+                host.afterFrame(dt)
+                Thread.sleep(8)
+            }
+        }
+        loop.start()
+        try {
+            click("ONLINE")
+            waitFor("JOIN")
+            typeCode(code)
+            click("JOIN")
+            waitFor("BOOST", 20_000)
+            assertTrue("host sees the guest", retry { hostWorld.snakes.any { it.remote } })
+
+            // Make the guest big, wait until the app has seen its own score.
+            retry { hostWorld.snakes.first { it.remote } }.apply {
+                grace = 1_000_000f
+                mass = 300f
+            }
+            val deadline = System.currentTimeMillis() + 20_000
+            var score = 0
+            while (System.currentTimeMillis() < deadline && score < 100) {
+                score = onApp { it.session!!.hudScore }
+                if (score < 100) Thread.sleep(200)
+            }
+            assertTrue("app sees its score ($score)", score >= 100)
+            val before = onApp { it.settings.coins }
+
+            // The host leaves.
+            running.set(false)
+            loop.join(2000)
+            hostClient.close()
+
+            waitFor("ROOM CLOSED", 30_000)
+            val after = onApp { it.settings.coins }
+            val result = onApp { it.session!!.result }
+            assertTrue("a result was recorded", result != null && result.earnedCoins > 0)
+            assertTrue("coins went up: $before -> $after", after > before)
+            assertEquals("coins match the result", before + result!!.earnedCoins, after)
+            shot("26_host_left_payout")
+        } finally {
+            running.set(false)
+            loop.join(2000)
+            hostClient.close()
+        }
+    }
+
+    @Test
     fun appHostsOnWifiWithoutAnyServerAndAGuestJoinsItsAddress() {
         assumeTrue("device has a Wi-Fi style address", com.ncorti.kotlin.template.app.net.LocalRelay.localAddress() != null)
         click("ONLINE")

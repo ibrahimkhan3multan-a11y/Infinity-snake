@@ -17,15 +17,18 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.ncorti.kotlin.template.app.audio.AudioEngine
 import com.ncorti.kotlin.template.app.audio.Haptics
 import com.ncorti.kotlin.template.app.data.Settings
+import com.ncorti.kotlin.template.app.ui.CodesScreen
 import com.ncorti.kotlin.template.app.ui.GameScreen
 import com.ncorti.kotlin.template.app.ui.HowToScreen
 import com.ncorti.kotlin.template.app.ui.InfinityTheme
 import com.ncorti.kotlin.template.app.ui.LocalAudio
 import com.ncorti.kotlin.template.app.ui.MenuScreen
 import com.ncorti.kotlin.template.app.ui.OnlineScreen
+import com.ncorti.kotlin.template.app.ui.QuestsScreen
 import com.ncorti.kotlin.template.app.ui.SettingsScreen
 import com.ncorti.kotlin.template.app.ui.ShopScreen
 import com.ncorti.kotlin.template.app.ui.SkinsScreen
+import com.ncorti.kotlin.template.app.ui.TesterScreen
 
 class MainActivity : ComponentActivity() {
 
@@ -92,6 +95,9 @@ private fun Root(app: AppState) {
                 Screen.SETTINGS -> SettingsScreen(app)
                 Screen.HOWTO -> HowToScreen(app)
                 Screen.ONLINE -> OnlineScreen(app)
+                Screen.QUESTS -> QuestsScreen(app)
+                Screen.CODES -> CodesScreen(app)
+                Screen.TESTER -> TesterScreen(app)
             }
         }
     }

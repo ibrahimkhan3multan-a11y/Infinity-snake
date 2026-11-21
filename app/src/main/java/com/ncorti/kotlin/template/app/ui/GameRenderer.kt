@@ -191,6 +191,17 @@ class GameRenderer {
                 }
                 if (sn.slow > 0f) drawCircle(Color(0xFF9BE7FF).copy(alpha = 0.35f), r * 1.7f, Offset(hx, hy))
                 if (sn.overdrive > 0f) drawCircle(Color(0xFFFFD45C).copy(alpha = 0.3f), r * 3.2f, Offset(hx, hy))
+                if (sn.dash > 0f) drawCircle(Color(0xFFFF7A3D).copy(alpha = 0.35f), r * 3.4f, Offset(hx, hy))
+                if (sn.feast > 0f) {
+                    val gold = Color(0xFFFFC93D)
+                    drawCircle(gold.copy(alpha = 0.12f), r * 2.2f, Offset(hx, hy))
+                    drawCircle(gold.copy(alpha = 0.8f), r * 2.2f, Offset(hx, hy), style = Stroke(2.5f))
+                }
+                if (sn.vacuum > 0f) {
+                    val vr = (sn.radius + 16f + Cfg.VACUUM_REACH) * zoom
+                    drawCircle(Color(0xFFB06BFF).copy(alpha = 0.08f), vr, Offset(hx, hy))
+                    drawCircle(Color(0xFFB06BFF).copy(alpha = 0.7f), vr, Offset(hx, hy), style = Stroke(3f))
+                }
                 if (sn.shield > 0f) {
                     val flicker = if (sn.shield < 1.5f && ((time * 10f).toInt() and 1) == 0) 0.35f else 1f
                     drawCircle(Color(0xFF2DE2E6).copy(alpha = 0.16f * flicker), r * 2.4f, Offset(hx, hy))

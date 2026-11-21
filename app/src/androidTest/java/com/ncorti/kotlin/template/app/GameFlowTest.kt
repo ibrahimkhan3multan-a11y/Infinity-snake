@@ -559,6 +559,85 @@ class GameFlowTest {
     }
 
     @Test
+    fun codesQuestsAndTesterMenuWork() {
+        assertEquals("fresh install starts with no coins", 0, onApp { app, _ -> app.settings.coins })
+
+        // Redeem the starter code through the real screens.
+        openSettings()
+        clickScrolling("REDEEM A CODE")
+        waitFor("Redeem Code")
+        fun enterCode(code: String) {
+            repeat(5) {
+                try {
+                    val field = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 8_000)
+                    field.text = code
+                    return
+                } catch (e: androidx.test.uiautomator.StaleObjectException) {
+                    pad(300)
+                }
+            }
+            throw AssertionError("could not type the code")
+        }
+        enterCode("starter")
+        click("REDEEM")
+        waitFor("Code accepted! You got 100 coins.")
+        assertEquals(100, onApp { app, _ -> app.settings.coins })
+        enterCode("STARTER")
+        click("REDEEM")
+        waitFor("You already used that code.")
+        assertEquals("a code works once", 100, onApp { app, _ -> app.settings.coins })
+        enterCode("WRONG")
+        click("REDEEM")
+        waitFor("That code isn't valid.")
+
+        // The secret code opens the tester menu.
+        enterCode(com.ncorti.kotlin.template.app.game.Codes.SECRET)
+        click("REDEEM")
+        waitFor("Tester Menu")
+        click("+1000")
+        assertEquals(1100, onApp { app, _ -> app.settings.coins })
+        click("-100")
+        assertEquals(1000, onApp { app, _ -> app.settings.coins })
+        clickScrolling("MAX ALL POWERS")
+        onApp { app, _ ->
+            for (p in com.ncorti.kotlin.template.app.game.Powers.all) assertEquals(p.id, 5, app.settings.powerLevel(p.id))
+        }
+        clickScrolling("UNLOCK ALL SKINS")
+        assertEquals(com.ncorti.kotlin.template.app.game.Skins.all.size, onApp { app, _ -> app.settings.unlocked.size })
+        shot("27_tester_menu")
+
+        // Quests: finish, claim once, all-done bonus, reset.
+        clickScrolling("FINISH QUESTS")
+        val granted = onApp { app, _ ->
+            val s = app.settings
+            val qs = s.dailyQuests()
+            assertEquals(com.ncorti.kotlin.template.app.game.Quests.PER_DAY, qs.size)
+            assertTrue(qs.all { s.questDone(it) })
+            var total = 0
+            for (q in qs) total += s.claimQuest(q)
+            assertEquals("no double claims", 0, s.claimQuest(qs[0]))
+            total
+        }
+        val expected = onApp { app, _ -> app.settings.dailyQuests().sumOf { it.reward } } +
+            com.ncorti.kotlin.template.app.game.Quests.ALL_DONE_BONUS
+        assertEquals("rewards plus the all-done bonus", expected, granted)
+        clickScrolling("RESET QUESTS")
+        assertEquals(0, onApp { app, _ -> app.settings.questsClaimable() })
+
+        // A real run counts toward quests.
+        onApp { app, _ ->
+            val s = app.settings
+            s.recordQuests(com.ncorti.kotlin.template.app.game.RunStats(400, 7, 500, 6, 200, true))
+            assertTrue("every quest done after a great run", s.dailyQuests().all { s.questDone(it) })
+        }
+        // Resetting codes makes STARTER usable again.
+        clickScrolling("RESET CODES")
+        onApp { app, _ ->
+            assertTrue(app.settings.redeem("STARTER") is com.ncorti.kotlin.template.app.data.Settings.Redeem.Ok)
+        }
+    }
+
+    @Test
     fun challengesAndDailyRewardWork() {
         val s = Settings(context)
         assertTrue(s.canClaimDaily())

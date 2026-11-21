@@ -168,6 +168,7 @@ class HostLogic(private val world: World, private val link: NetLink) {
                 JSONArray().put(s.id).put(Protocol.snakeFlags(s)).put(s.mass.toDouble())
                     .put(Math.round(s.angle * 100f) / 100.0).put(s.n)
                     .put(s.shield > 0f).put(s.magnet > 0f).put(s.overdrive > 0f).put(s.freeze > 0f).put(s.slow > 0f)
+                    .put(s.feast > 0f).put(s.dash > 0f).put(s.vacuum > 0f)
                     .put(if (s.alive) Protocol.packBody(s) else JSONArray()),
             )
         }

@@ -9,11 +9,17 @@ import kotlin.math.ceil
 class PowerState {
     val wait = FloatArray(Powers.all.size)
 
+    /** Tester option: powers can be used again straight away. */
+    var noCooldown = false
+
     fun effectLeft(s: Snake, p: Power): Float = when (p.id) {
         Powers.SHIELD.id -> s.shield
         Powers.MAGNET.id -> s.magnet
         Powers.OVERDRIVE.id -> s.overdrive
         Powers.FREEZE.id -> s.freeze
+        Powers.FEAST.id -> s.feast
+        Powers.DASH.id -> s.dash
+        Powers.VACUUM.id -> s.vacuum
         else -> 0f
     }
 
@@ -26,7 +32,7 @@ class PowerState {
         ceil((wait[Powers.all.indexOf(p)] - effectLeft(s, p)).coerceAtLeast(0f)).toInt()
 
     fun ready(s: Snake, p: Power, level: Int): Boolean =
-        level > 0 && s.alive && !isActive(s, p) && wait[Powers.all.indexOf(p)] <= 0f
+        level > 0 && s.alive && !isActive(s, p) && (noCooldown || wait[Powers.all.indexOf(p)] <= 0f)
 
     /** Fires the power if it is ready. Returns true if it was used. */
     fun use(s: Snake, p: Power, level: Int): Boolean {
@@ -37,9 +43,12 @@ class PowerState {
             Powers.MAGNET.id -> s.magnet = dur
             Powers.OVERDRIVE.id -> s.overdrive = dur
             Powers.FREEZE.id -> s.freeze = dur
+            Powers.FEAST.id -> s.feast = dur
+            Powers.DASH.id -> s.dash = dur
+            Powers.VACUUM.id -> s.vacuum = dur
             else -> s.energy = s.maxEnergy
         }
-        wait[Powers.all.indexOf(p)] = dur + p.cooldown(level)
+        wait[Powers.all.indexOf(p)] = if (noCooldown) 0f else dur + p.cooldown(level)
         return true
     }
 

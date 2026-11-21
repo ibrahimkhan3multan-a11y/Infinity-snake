@@ -195,5 +195,8 @@ fun powerIcon(id: String): Ico = when (id) {
     "over" -> Ico.BOLT
     "freeze" -> Ico.SNOW
     "recharge" -> Ico.REFILL
+    "feast" -> Ico.STAR
+    "dash" -> Ico.CHEVRONS
+    "vacuum" -> Ico.TARGET
     else -> Ico.CHEVRONS
 }

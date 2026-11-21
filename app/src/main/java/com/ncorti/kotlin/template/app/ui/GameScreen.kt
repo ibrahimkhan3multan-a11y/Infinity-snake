@@ -252,15 +252,19 @@ fun GameScreen(app: AppState, session: GameSession) {
 
             Leaderboard(session, settings.playerName, Modifier.align(Alignment.TopEnd))
 
-            Row(
+            val owned = Powers.inGame.filter { settings.powerLevel(it.id) > 0 }
+            Column(
                 Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 124.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.Bottom,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalAlignment = Alignment.End,
             ) {
-                Powers.inGame.forEach { power ->
-                    if (settings.powerLevel(power.id) > 0) PowerButton(session, power)
+                // Up to four buttons per row, so a full set of eight stays on screen.
+                owned.chunked(4).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+                        row.forEach { power -> PowerButton(session, power) }
+                    }
                 }
             }
             BoostButton(session, Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 4.dp))
@@ -268,7 +272,7 @@ fun GameScreen(app: AppState, session: GameSession) {
 
         // ---------------------------------------------------------------- overlays
         val result = session.result
-        if (session.disconnected == null && session.over && result != null) {
+        if (session.over && result != null) {
             Scrim {
                 var shown by remember { mutableStateOf(false) }
                 LaunchedEffect(Unit) { shown = true }
@@ -295,11 +299,23 @@ fun GameScreen(app: AppState, session: GameSession) {
                 ) {
                     Column(Modifier.weight(1.3f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            if (result.newHighScore) "NEW HIGH SCORE!" else "ELIMINATED",
-                            color = if (result.newHighScore) Neon.Lime else Neon.Pink,
+                            when {
+                                session.disconnected != null -> "ROOM CLOSED"
+                                result.newHighScore -> "NEW HIGH SCORE!"
+                                else -> "ELIMINATED"
+                            },
+                            color = if (result.newHighScore && session.disconnected == null) Neon.Lime else Neon.Pink,
                             fontSize = 24.sp,
                             fontWeight = FontWeight.Black,
                         )
+                        if (session.disconnected != null) {
+                            Text(
+                                "${session.disconnected}. You keep the coins you earned.",
+                                color = Neon.Cyan,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
                         ResultRow("Final score", scoreShown.toString())
                         ResultRow("Best score", result.best.toString())
                         if (!result.solo) ResultRow("Final rank", "#${result.rank}")
@@ -312,7 +328,10 @@ fun GameScreen(app: AppState, session: GameSession) {
                         }
                         NeonButton(
                             "PLAY AGAIN",
-                            { if (session.isOnline) session.respawnInRoom() else app.startGame(session.solo) },
+                            {
+                                if (session.isOnline && session.disconnected == null) session.respawnInRoom()
+                                else app.startGame(session.solo)
+                            },
                             Modifier.fillMaxWidth(),
                         )
                         NeonButton("MAIN MENU", { app.toMenu() }, Modifier.fillMaxWidth(), primary = false)
