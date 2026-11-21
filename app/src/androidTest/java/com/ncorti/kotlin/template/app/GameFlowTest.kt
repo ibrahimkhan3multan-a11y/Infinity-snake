@@ -70,10 +70,15 @@ class GameFlowTest {
     /** Clicks [text], swiping the scrolling screen up until it becomes visible. */
     private fun clickScrolling(text: String) {
         repeat(8) {
-            val obj = device.findObject(By.text(text))
-            if (obj != null) {
-                obj.click()
-                return
+            try {
+                val obj = device.findObject(By.text(text))
+                if (obj != null) {
+                    obj.click()
+                    return
+                }
+            } catch (e: androidx.test.uiautomator.StaleObjectException) {
+                Thread.sleep(300) // the screen recomposed between find and click; look again
+                return@repeat
             }
             val w = device.displayWidth
             val h = device.displayHeight
