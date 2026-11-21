@@ -64,7 +64,15 @@ class GameFlowTest {
 
     private fun click(text: String) {
         waitFor(text)
-        device.findObject(By.text(text)).click()
+        repeat(5) {
+            try {
+                device.findObject(By.text(text)).click()
+                return
+            } catch (e: androidx.test.uiautomator.StaleObjectException) {
+                Thread.sleep(300) // the screen recomposed between find and click; look again
+            }
+        }
+        throw AssertionError("could not click '$text'")
     }
 
     /** Clicks [text], swiping the scrolling screen up until it becomes visible. */
