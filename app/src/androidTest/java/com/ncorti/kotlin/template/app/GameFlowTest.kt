@@ -640,7 +640,8 @@ class GameFlowTest {
         // A real run counts toward quests.
         onApp { app, _ ->
             val s = app.settings
-            s.recordQuests(com.ncorti.kotlin.template.app.game.RunStats(400, 7, 500, 6, 200, true))
+            // Three runs, so "play 3 games" (one of the possible daily quests) is covered too.
+            repeat(3) { s.recordQuests(com.ncorti.kotlin.template.app.game.RunStats(400, 7, 500, 6, 200, true)) }
             assertTrue("every quest done after a great run", s.dailyQuests().all { s.questDone(it) })
         }
         // Resetting codes makes STARTER usable again.
@@ -732,7 +733,11 @@ class GameFlowTest {
         }
         // Through the real screens.
         click("SHOP")
-        clickScrolling("REBIRTH  ·  NEXT 200 COINS")
+        waitFor("Shop")
+        shot("30_shop_rebirth")
+        val entry = device.wait(Until.findObject(By.textStartsWith("REBIRTH")), 10_000)
+        assertNotNull("rebirth button in the shop", entry)
+        entry.click()
         waitFor("Rebirth")
         click("REBIRTH")
         waitFor("Are you sure? This cannot be undone.")
