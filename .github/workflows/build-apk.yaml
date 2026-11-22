@@ -38,6 +38,11 @@ jobs:
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
+      - name: Show the APK signing key (must be the same on every build, or updates fail)
+        run: |
+          keytool -printcert -jarfile app/build/outputs/apk/debug/*.apk | grep -E "Owner|SHA256"
+          echo "Expected: $(keytool -list -keystore app/infinity-debug.keystore -storepass android | grep SHA)"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
