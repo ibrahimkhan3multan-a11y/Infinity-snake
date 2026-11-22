@@ -77,7 +77,7 @@ class GameFlowTest {
 
     /** Clicks [text], swiping the scrolling screen up until it becomes visible. */
     private fun clickScrolling(text: String) {
-        repeat(8) {
+        repeat(16) { attempt ->
             try {
                 val obj = device.findObject(By.text(text))
                 if (obj != null) {
@@ -90,8 +90,12 @@ class GameFlowTest {
             }
             val w = device.displayWidth
             val h = device.displayHeight
-            device.swipe(w / 2, (h * 0.8).toInt(), w / 2, (h * 0.3).toInt(), 12)
-            Thread.sleep(300)
+            // Mostly scroll down; if a fling carried us past the item, scroll back up for a while.
+            val up = attempt in 6..9
+            val from = if (up) 0.3 else 0.8
+            val to = if (up) 0.7 else 0.35
+            device.swipe(w / 2, (h * from).toInt(), w / 2, (h * to).toInt(), 25)
+            Thread.sleep(500)
         }
         throw AssertionError("'$text' not found even after scrolling")
     }
