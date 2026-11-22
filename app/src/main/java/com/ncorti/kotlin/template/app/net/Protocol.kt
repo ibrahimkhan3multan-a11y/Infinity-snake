@@ -1,6 +1,7 @@
 package com.ncorti.kotlin.template.app.net
 
 import com.ncorti.kotlin.template.app.game.Powers
+import com.ncorti.kotlin.template.app.game.Rebirth
 import com.ncorti.kotlin.template.app.game.Snake
 import org.json.JSONArray
 import org.json.JSONObject
@@ -25,10 +26,13 @@ object Protocol {
     fun frameToHost(m: JSONObject): JSONObject = JSONObject().put("t", "m").put("m", m)
     fun frameToGuest(to: Int, m: JSONObject): JSONObject = JSONObject().put("t", "m").put("to", to).put("m", m)
 
-    fun hello(name: String, head: Int, tail: Int, glow: Boolean, rainbow: Boolean, tank: Int, levels: IntArray) =
+    fun hello(
+        name: String, head: Int, tail: Int, glow: Boolean, rainbow: Boolean, tank: Int, levels: IntArray,
+        rush: Float = 0f,
+    ) =
         JSONObject()
             .put("k", "hello").put("name", name).put("head", head).put("tail", tail)
-            .put("glow", glow).put("rainbow", rainbow).put("tank", tank)
+            .put("glow", glow).put("rainbow", rainbow).put("tank", tank).put("rush", rush.toDouble())
             .put("lv", JSONArray(levels.toList()))
 
     fun input(angle: Float, boost: Boolean) =
@@ -83,6 +87,7 @@ object Protocol {
 
     fun clampLevel(v: Int) = v.coerceIn(0, Powers.MAX_LEVEL)
     fun clampTank(v: Int) = v.coerceIn(0, Powers.TANK_MAX)
+    fun clampRush(v: Double) = v.toFloat().coerceIn(0f, Rebirth.startBoost(Rebirth.MAX))
 
     val FOOD_RANGE_SQ = FOOD_RANGE * FOOD_RANGE
     val SNAKE_RANGE_SQ = SNAKE_RANGE * SNAKE_RANGE

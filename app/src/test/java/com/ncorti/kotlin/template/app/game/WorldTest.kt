@@ -447,4 +447,23 @@ class WorldTest {
         w.player.feast = 0f
         assertTrue("tester mode ignores cooldown", kit.use(w.player, Powers.FEAST, 1))
     }
+
+    @Test
+    fun startRushIsFastAndWearsOff() {
+        val w = emptyWorld()
+        w.player.place(0f, 0f, 0f, 10f)
+        w.player.grace = 1_000_000f
+        w.player.energy = 0f
+        w.player.rush = 1f
+        val x0 = w.player.xs[0]
+        w.run(0.5f)
+        val fast = (w.player.xs[0] - x0) / 0.5f
+        assertTrue("rush speed $fast beats boost", fast > Cfg.BOOST_SPEED * 1.2f)
+        w.run(1f)
+        assertEquals("rush ran out", 0f, w.player.rush, 0.001f)
+        val x1 = w.player.xs[0]
+        w.run(0.5f)
+        val normal = (w.player.xs[0] - x1) / 0.5f
+        assertTrue("back to normal speed $normal", normal < Cfg.BASE_SPEED * 1.2f)
+    }
 }

@@ -18,6 +18,7 @@ class HostLogic(private val world: World, private val link: NetLink) {
         var snake: Snake? = null
         val kit = PowerState()
         var levels = IntArray(Powers.all.size)
+        var rush = 0f
         var angle = 0f
         var boost = false
         var snapshotsSent = 0
@@ -65,6 +66,8 @@ class HostLogic(private val world: World, private val link: NetLink) {
                 )
                 s.maxEnergy = Powers.tankCapacity(Protocol.clampTank(m.optInt("tank")))
                 s.energy = s.maxEnergy
+                r.rush = Protocol.clampRush(m.optDouble("rush", 0.0))
+                s.rush = r.rush
                 r.snake = s
                 r.angle = s.angle
                 link.send(
@@ -87,6 +90,7 @@ class HostLogic(private val world: World, private val link: NetLink) {
                 if (s.alive) return
                 world.respawnRemote(s)
                 s.energy = s.maxEnergy
+                s.rush = r.rush
                 r.kit.reset()
             }
         }
@@ -168,7 +172,7 @@ class HostLogic(private val world: World, private val link: NetLink) {
                 JSONArray().put(s.id).put(Protocol.snakeFlags(s)).put(s.mass.toDouble())
                     .put(Math.round(s.angle * 100f) / 100.0).put(s.n)
                     .put(s.shield > 0f).put(s.magnet > 0f).put(s.overdrive > 0f).put(s.freeze > 0f).put(s.slow > 0f)
-                    .put(s.feast > 0f).put(s.dash > 0f).put(s.vacuum > 0f)
+                    .put(s.feast > 0f).put(s.dash > 0f || s.rush > 0f).put(s.vacuum > 0f)
                     .put(if (s.alive) Protocol.packBody(s) else JSONArray()),
             )
         }

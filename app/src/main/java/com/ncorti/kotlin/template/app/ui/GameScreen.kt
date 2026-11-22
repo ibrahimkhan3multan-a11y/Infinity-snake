@@ -91,8 +91,11 @@ fun GameScreen(app: AppState, session: GameSession) {
     val settings = app.settings
     val renderer = remember { GameRenderer() }
     val focusRequester = remember { FocusRequester() }
+    var showMap by remember { mutableStateOf(false) }
 
-    BackHandler { if (session.over) app.toMenu() else session.paused = !session.paused }
+    BackHandler {
+        if (showMap) showMap = false else if (session.over) app.toMenu() else session.paused = !session.paused
+    }
 
     // One tick per display frame while this screen is composed (frames stop in the background,
     // and AppState also pauses the run then).
@@ -165,7 +168,10 @@ fun GameScreen(app: AppState, session: GameSession) {
                                     val dx = ch.position.x - j.home.x
                                     val dy = ch.position.y - j.home.y
                                     val dist = hypot(dx, dy)
-                                    if (dist > 10.dp.toPx()) session.input.angle = atan2(dy, dx)
+                                    if (dist > 10.dp.toPx()) {
+                                        session.userSteered()
+                                        session.input.angle = atan2(dy, dx)
+                                    }
                                     val reach = j.radius * 0.8f
                                     val k = if (dist > reach) reach / dist else 1f
                                     j.knob = Offset(j.home.x + dx * k, j.home.y + dy * k)
@@ -216,7 +222,7 @@ fun GameScreen(app: AppState, session: GameSession) {
                     HudIconButton({ app.setSound(!settings.sound) }, "Sound") { drawSpeaker(settings.sound) }
                 }
                 StatsPanel(session)
-                Minimap(session)
+                Minimap(session) { showMap = true }
             }
 
             session.room?.let { room ->
@@ -234,6 +240,25 @@ fun GameScreen(app: AppState, session: GameSession) {
                         .background(Color(0x66000000))
                         .padding(horizontal = 10.dp, vertical = 3.dp),
                 )
+            }
+            if (session.routeActive) {
+                Row(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 26.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0x99000000))
+                        .clickable { session.cancelRoute() }
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "→ ${session.routeName}  ·  ${session.routeDistance / 10} m",
+                        color = Neon.Cyan, fontWeight = FontWeight.Bold, fontSize = 12.sp,
+                    )
+                    Text("✕ STOP", color = Neon.Pink, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                }
             }
             if (session.banner.isNotEmpty()) {
                 Text(
@@ -271,6 +296,7 @@ fun GameScreen(app: AppState, session: GameSession) {
         }
 
         // ---------------------------------------------------------------- overlays
+        if (showMap && !session.over) MapOverlay(session) { showMap = false }
         val result = session.result
         if (session.over && result != null) {
             Scrim {
@@ -385,15 +411,18 @@ private fun steerDrag(s: GameSession, pos: Offset, w: Float, h: Float, minDist: 
     val hy = h / 2f + (p.ys[0] - s.camY) * s.zoom
     val dx = pos.x - hx
     val dy = pos.y - hy
-    if (dx * dx + dy * dy > minDist * minDist) s.input.angle = atan2(dy, dx)
+    if (dx * dx + dy * dy > minDist * minDist) {
+        s.userSteered()
+        s.input.angle = atan2(dy, dx)
+    }
 }
 
 private fun handleKey(s: GameSession, e: KeyEvent): Boolean {
     val down = e.type == KeyEventType.KeyDown
     if (!down && e.type != KeyEventType.KeyUp) return false
     return when (e.key) {
-        Key.DirectionLeft, Key.A -> { s.input.left = down; true }
-        Key.DirectionRight, Key.D -> { s.input.right = down; true }
+        Key.DirectionLeft, Key.A -> { if (down) s.userSteered(); s.input.left = down; true }
+        Key.DirectionRight, Key.D -> { if (down) s.userSteered(); s.input.right = down; true }
         Key.Spacebar, Key.ShiftLeft, Key.ShiftRight -> { s.input.keyBoost = down; true }
         Key.P -> { if (down && !s.over) s.paused = !s.paused; true }
         else -> false
@@ -478,11 +507,13 @@ private fun MiniStat(label: String, value: String) {
 }
 
 @Composable
-private fun Minimap(session: GameSession) {
+private fun Minimap(session: GameSession, onOpen: () -> Unit) {
     Canvas(
         Modifier
             .size(96.dp)
             .clip(CircleShape)
+            .clickable(onClick = onOpen)
+            .semantics { contentDescription = "Map" }
             .background(Color(0x88100A22)),
     ) {
         @Suppress("UNUSED_VARIABLE")

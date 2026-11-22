@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +33,13 @@ fun ShopScreen(app: AppState) {
             "Coins: ${s.coins}   ·   Earn 1 coin for every 4 points you score.",
             color = Neon.Cyan,
             fontWeight = FontWeight.SemiBold,
+        )
+        val next = s.rebirthCost()
+        NeonButton(
+            if (next == null) "REBIRTH  ·  MAX" else "REBIRTH  ·  NEXT $next COINS",
+            { app.open(com.ncorti.kotlin.template.app.Screen.REBIRTH) },
+            Modifier.fillMaxWidth().height(46.dp),
+            accent = Neon.Pink,
         )
         Text("PERMANENT UPGRADE", color = Neon.Dim, fontSize = 11.sp, letterSpacing = 1.sp)
         TankCard(app)

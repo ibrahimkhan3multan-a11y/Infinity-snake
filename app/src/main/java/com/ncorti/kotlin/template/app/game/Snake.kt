@@ -32,6 +32,8 @@ class Snake(val id: Int, val isPlayer: Boolean, var name: String) {
     var overdrive = 0f
     var feast = 0f
     var dash = 0f
+    /** Free speed burst at the start of a life (from rebirths). Moves like Dash. */
+    var rush = 0f
     var vacuum = 0f
     /** Freeze power: rivals within [Cfg.FREEZE_RADIUS] get slowed. */
     var freeze = 0f
@@ -89,6 +91,7 @@ class Snake(val id: Int, val isPlayer: Boolean, var name: String) {
         overdrive = 0f
         feast = 0f
         dash = 0f
+        rush = 0f
         vacuum = 0f
         freeze = 0f
         slow = 0f
@@ -107,17 +110,19 @@ class Snake(val id: Int, val isPlayer: Boolean, var name: String) {
         if (overdrive > 0f) overdrive = max(0f, overdrive - dt)
         if (feast > 0f) feast = max(0f, feast - dt)
         if (dash > 0f) dash = max(0f, dash - dt)
+        if (rush > 0f) rush = max(0f, rush - dt)
         if (vacuum > 0f) vacuum = max(0f, vacuum - dt)
         if (freeze > 0f) freeze = max(0f, freeze - dt)
         if (slow > 0f) slow = max(0f, slow - dt)
 
         // Boost runs on its own energy bar: it never burns length or drops pellets. After running
         // dry it needs a little energy back before it can start again.
-        val free = overdrive > 0f || dash > 0f
+        val burst = dash > 0f || rush > 0f
+        val free = overdrive > 0f || burst
         val wantBoost = boosting || free
         boostActive = wantBoost && (free || energy > (if (boostActive) 0f else Cfg.BOOST_MIN_START))
         val speed = when {
-            dash > 0f -> Cfg.BOOST_SPEED * Cfg.DASH_MULT
+            burst -> Cfg.BOOST_SPEED * Cfg.DASH_MULT
             else -> (if (boostActive) Cfg.BOOST_SPEED else Cfg.BASE_SPEED) * (if (slow > 0f) Cfg.FREEZE_SLOW else 1f)
         }
         if (boostActive) {

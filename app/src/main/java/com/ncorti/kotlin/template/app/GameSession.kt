@@ -14,6 +14,7 @@ import com.ncorti.kotlin.template.app.game.Particles
 import com.ncorti.kotlin.template.app.game.Power
 import com.ncorti.kotlin.template.app.game.PowerState
 import com.ncorti.kotlin.template.app.game.Powers
+import com.ncorti.kotlin.template.app.game.Rebirth
 import com.ncorti.kotlin.template.app.game.RunStats
 import com.ncorti.kotlin.template.app.game.Skins
 import com.ncorti.kotlin.template.app.game.Snake
@@ -118,6 +119,82 @@ class GameSession(
         null
     }
 
+    // ---- Travel route: tap the map, and the snake steers itself there until you steer or arrive.
+    var routeActive by mutableStateOf(false)
+        private set
+    var routeName by mutableStateOf("")
+        private set
+    /** Where the route ends right now (world units). For a followed player this tracks their head. */
+    var routeX = 0f
+        private set
+    var routeY = 0f
+        private set
+    private var routeSnakeId = -1
+
+    /** Distance (world units) from the player to the end of the route. */
+    var routeDistance by mutableIntStateOf(0)
+        private set
+
+    fun routeToPoint(x: Float, y: Float, name: String = "that spot") {
+        val lim = Cfg.ARENA_RADIUS - 160f
+        val d = sqrt(x * x + y * y)
+        val k = if (d > lim) lim / d else 1f
+        routeX = x * k
+        routeY = y * k
+        routeSnakeId = -1
+        routeName = name
+        routeActive = world.player.alive
+        tickRoute(world.player)
+    }
+
+    fun routeToSnake(snakeId: Int) {
+        val t = world.snakes.firstOrNull { it.id == snakeId && it.alive && !it.isPlayer } ?: return
+        routeSnakeId = snakeId
+        routeName = t.name
+        routeX = t.xs[0]
+        routeY = t.ys[0]
+        routeActive = world.player.alive
+        tickRoute(world.player)
+    }
+
+    fun cancelRoute() {
+        routeActive = false
+        routeSnakeId = -1
+    }
+
+    /** Call whenever the player steers by hand: the autopilot lets go. */
+    fun userSteered() {
+        if (routeActive) cancelRoute()
+    }
+
+    private fun tickRoute(p: Snake) {
+        if (!routeActive) return
+        if (!p.alive) {
+            cancelRoute()
+            return
+        }
+        if (routeSnakeId >= 0) {
+            val t = world.snakes.firstOrNull { it.id == routeSnakeId }
+            if (t == null || !t.alive) {
+                cancelRoute()
+                showBanner("$routeName is gone", Sfx.POWER)
+                return
+            }
+            routeX = t.xs[0]
+            routeY = t.ys[0]
+        }
+        val dx = routeX - p.xs[0]
+        val dy = routeY - p.ys[0]
+        val d = sqrt(dx * dx + dy * dy)
+        routeDistance = d.toInt()
+        if (d < 130f + p.radius * 2f) {
+            cancelRoute()
+            showBanner(if (routeSnakeId >= 0) "Reached $routeName" else "Arrived", Sfx.POWER)
+            return
+        }
+        input.angle = kotlin.math.atan2(dy, dx)
+    }
+
     // Counters for the quests; reset on every new life.
     private var guestKills = 0
     private var foodEaten = 0
@@ -192,6 +269,7 @@ class GameSession(
         me.maxEnergy = Powers.tankCapacity(settings.tankLevel)
         me.energy = me.maxEnergy
         if (settings.devBigStart && guest == null) me.mass = 400f
+        if (guest == null) me.rush = Rebirth.startBoost(settings.rebirths)
         input.angle = world.player.angle
         camX = world.player.xs[0]
         camY = world.player.ys[0]
@@ -211,6 +289,7 @@ class GameSession(
             return
         }
 
+        tickRoute(p)
         if (p.alive && !paused) {
             if (input.keyTurn != 0) {
                 input.angle += input.keyTurn * 3.2f * dt
@@ -328,6 +407,7 @@ class GameSession(
             input.angle += input.keyTurn * 3.2f * dt
             if (input.angle > PI_F) input.angle -= TWO_PI else if (input.angle < -PI_F) input.angle += TWO_PI
         }
+        tickRoute(p)
         val before = g.snapshots
         g.sendInput(input.angle, input.touchBoost || input.keyBoost, dt)
         if (g.update(dt)) {
@@ -388,6 +468,7 @@ class GameSession(
         }
         val me = world.player
         world.respawnRemote(me)
+        me.rush = Rebirth.startBoost(settings.rebirths)
         me.maxEnergy = Powers.tankCapacity(settings.tankLevel)
         me.energy = me.maxEnergy
         powers.reset()
@@ -531,6 +612,7 @@ class GameSession(
 
     private fun finalizeWith(score: Int, rank: Int, length: Int, kills: Int) {
         if (finalized) return
+        cancelRoute()
         finalized = true
         val previousBest = settings.highScore
         val earned = settings.recordRun(score, rank, solo, kills)

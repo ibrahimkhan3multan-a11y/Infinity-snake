@@ -25,6 +25,7 @@ import com.ncorti.kotlin.template.app.ui.LocalAudio
 import com.ncorti.kotlin.template.app.ui.MenuScreen
 import com.ncorti.kotlin.template.app.ui.OnlineScreen
 import com.ncorti.kotlin.template.app.ui.QuestsScreen
+import com.ncorti.kotlin.template.app.ui.RebirthScreen
 import com.ncorti.kotlin.template.app.ui.SettingsScreen
 import com.ncorti.kotlin.template.app.ui.ShopScreen
 import com.ncorti.kotlin.template.app.ui.SkinsScreen
@@ -98,6 +99,7 @@ private fun Root(app: AppState) {
                 Screen.QUESTS -> QuestsScreen(app)
                 Screen.CODES -> CodesScreen(app)
                 Screen.TESTER -> TesterScreen(app)
+                Screen.REBIRTH -> RebirthScreen(app)
             }
         }
     }

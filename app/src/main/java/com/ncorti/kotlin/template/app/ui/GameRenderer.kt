@@ -191,7 +191,7 @@ class GameRenderer {
                 }
                 if (sn.slow > 0f) drawCircle(Color(0xFF9BE7FF).copy(alpha = 0.35f), r * 1.7f, Offset(hx, hy))
                 if (sn.overdrive > 0f) drawCircle(Color(0xFFFFD45C).copy(alpha = 0.3f), r * 3.2f, Offset(hx, hy))
-                if (sn.dash > 0f) drawCircle(Color(0xFFFF7A3D).copy(alpha = 0.35f), r * 3.4f, Offset(hx, hy))
+                if (sn.dash > 0f || sn.rush > 0f) drawCircle(Color(0xFFFF7A3D).copy(alpha = 0.35f), r * 3.4f, Offset(hx, hy))
                 if (sn.feast > 0f) {
                     val gold = Color(0xFFFFC93D)
                     drawCircle(gold.copy(alpha = 0.12f), r * 2.2f, Offset(hx, hy))
@@ -224,6 +224,21 @@ class GameRenderer {
                 if (!sn.isPlayer && quality >= 1) {
                     drawContext.canvas.nativeCanvas.drawText(sn.name, hx, hy - r - 8f * dens, namePaint)
                 }
+            }
+
+            // Route to a tapped spot or player: a moving dashed line and a pulsing marker.
+            if (s.routeActive && s.world.player.alive) {
+                val me = s.world.player
+                val from = Offset(ox + me.xs[0] * zoom, oy + me.ys[0] * zoom)
+                val to = Offset(ox + s.routeX * zoom, oy + s.routeY * zoom)
+                val cyan = Color(0xFF2DE2E6)
+                drawLine(
+                    cyan.copy(alpha = 0.75f), from, to, 3f * density,
+                    pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(18f * density, 12f * density), (time * 60f) % (30f * density)),
+                )
+                val pulse = 1f + 0.18f * sin(time * 6f)
+                drawCircle(cyan.copy(alpha = 0.22f), 20f * density * pulse, to)
+                drawCircle(cyan, 20f * density * pulse, to, style = Stroke(2.5f * density))
             }
 
             // Particles.

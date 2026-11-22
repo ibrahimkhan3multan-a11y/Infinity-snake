@@ -651,6 +651,116 @@ class GameFlowTest {
     }
 
     @Test
+    fun tappingTheMapRoutesYouThereAndSteeringCancelsIt() {
+        startSolo()
+        onApp { app, _ ->
+            val p = app.session!!.world.player
+            p.grace = 1_000_000f
+            p.place(0f, 0f, 0f, 40f)
+            app.session!!.input.angle = 0f
+        }
+        // Open the map from the minimap, pick an area, go.
+        assertTrue("minimap on screen", device.wait(Until.hasObject(By.desc("Map")), 15_000))
+        device.findObject(By.desc("Map")).click()
+        waitFor("MAP")
+        click("NORTH")
+        waitFor("GO THERE")
+        assertTrue("selection text", device.wait(Until.hasObject(By.textStartsWith("Go to the north")), 10_000))
+        shot("28_map_selected")
+        click("GO THERE")
+        assertTrue("route pill shown", device.wait(Until.hasObject(By.textStartsWith("→ the north")), 15_000))
+        assertTrue("route active", onApp { app, _ -> app.session!!.routeActive })
+        shot("29_route_active")
+
+        // The autopilot aims the snake at the target (north = negative y).
+        val aimed = onApp { app, _ ->
+            val s = app.session!!
+            val p = s.world.player
+            val want = kotlin.math.atan2(s.routeY - p.ys[0], s.routeX - p.xs[0])
+            kotlin.math.abs(com.ncorti.kotlin.template.app.game.angleDiff(s.input.angle, want)) < 0.2f
+        }
+        assertTrue("steering points at the target", aimed)
+
+        // It really gets closer (no wall-clock assumptions: just wait for visible progress).
+        val start = onApp { app, _ -> app.session!!.routeDistance }
+        val deadline = System.currentTimeMillis() + 60_000
+        var progressed = false
+        while (System.currentTimeMillis() < deadline && !progressed) {
+            progressed = onApp { app, _ -> !app.session!!.routeActive || app.session!!.routeDistance < start - 150 }
+            if (!progressed) pad(300)
+        }
+        assertTrue("moved toward the target", progressed)
+
+        // Steering by hand lets go of the autopilot.
+        onApp { app, _ ->
+            val s = app.session!!
+            s.routeToPoint(0f, 1500f, "test")
+            assertTrue(s.routeActive)
+            s.userSteered()
+            assertFalse(s.routeActive)
+        }
+
+        // Tapping the pill stops a route, and following a player works too.
+        onApp { app, _ -> app.session!!.routeToPoint(900f, 900f, "the far corner") }
+        click("✕ STOP")
+        assertFalse(onApp { app, _ -> app.session!!.routeActive })
+        onApp { app, _ ->
+            val s = app.session!!
+            val buddy = s.world.addRemote("Buddy", 0xFF00FF00.toInt(), 0xFF008800.toInt(), false, false)
+            buddy.place(600f, 0f, 0f, 20f)
+            buddy.grace = 1_000_000f
+            s.routeToSnake(buddy.id)
+            assertTrue("following a player", s.routeActive)
+            assertEquals("Buddy", s.routeName)
+            buddy.alive = false
+            s.cancelRoute()
+        }
+    }
+
+    @Test
+    fun rebirthResetsCoinsAndSkinsOnlyAndGivesBonuses() {
+        onApp { app, _ ->
+            val s = app.settings
+            s.devSetAllPowers(3)
+            s.devAddCoins(150)
+            s.devUnlockAllSkins()
+            assertFalse("can't afford the first rebirth (200)", s.canRebirth())
+            assertFalse(s.rebirth())
+            assertEquals(150, s.coins)
+            s.devAddCoins(550) // 700 total
+            assertTrue(s.canRebirth())
+        }
+        // Through the real screens.
+        click("SHOP")
+        clickScrolling("REBIRTH  ·  NEXT 200 COINS")
+        waitFor("Rebirth")
+        click("REBIRTH")
+        waitFor("Are you sure? This cannot be undone.")
+        click("YES, REBIRTH")
+        waitFor("Reborn! Rebirth 1 unlocked.")
+        onApp { app, _ ->
+            val s = app.settings
+            assertEquals("coins are lost", 0, s.coins)
+            assertEquals("skins are lost", setOf(0, 1), s.unlocked)
+            assertEquals(0, s.selectedSkin)
+            assertEquals(1, s.rebirths)
+            assertEquals("powers are kept", 3, s.powerLevel("shield"))
+            assertEquals("tank is kept", com.ncorti.kotlin.template.app.game.Powers.TANK_MAX, s.tankLevel)
+            assertEquals("next rebirth costs 500", 500, s.rebirthCost())
+            assertFalse(s.canRebirth())
+            // +25% coins on runs
+            val earned = s.recordRun(score = 400, rank = 1, solo = true, kills = 0)
+            assertEquals(125, earned)
+        }
+        // New lives start with a speed burst.
+        val rush = onApp { app, _ ->
+            app.startGame(true)
+            app.session!!.world.player.rush
+        }
+        assertEquals("3 s start burst after one rebirth", 3f, rush, 0.01f)
+    }
+
+    @Test
     fun challengesAndDailyRewardWork() {
         val s = Settings(context)
         assertTrue(s.canClaimDaily())

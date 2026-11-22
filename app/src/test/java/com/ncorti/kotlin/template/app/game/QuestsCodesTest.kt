@@ -53,4 +53,18 @@ class QuestsCodesTest {
         assertNull("the secret is not a normal code", Codes.find(Codes.SECRET))
         for (c in listOf("STARTER", "FLARE", "SHIELDUP", "DASHNOW")) assertTrue(Codes.find(c)!!.text.isNotEmpty())
     }
+
+    @Test
+    fun rebirthCostsAndBonusesGrow() {
+        assertEquals(200, Rebirth.cost(0))
+        assertEquals(500, Rebirth.cost(1))
+        assertEquals(700, Rebirth.cost(2))
+        assertNull("no rebirth past the last", Rebirth.cost(Rebirth.MAX))
+        assertTrue(Rebirth.costs.zipWithNext().all { (a, b) -> b > a })
+        assertEquals(1f, Rebirth.coinMultiplier(0), 0.001f)
+        assertEquals(1.25f, Rebirth.coinMultiplier(1), 0.001f)
+        assertEquals(0f, Rebirth.startBoost(0), 0.001f)
+        assertEquals(3f, Rebirth.startBoost(1), 0.001f)
+        assertTrue(Rebirth.startBoost(5) > Rebirth.startBoost(2))
+    }
 }

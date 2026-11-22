@@ -32,6 +32,7 @@ import com.ncorti.kotlin.template.app.data.Settings
 import com.ncorti.kotlin.template.app.game.Codes
 import com.ncorti.kotlin.template.app.game.Quest
 import com.ncorti.kotlin.template.app.game.Quests
+import com.ncorti.kotlin.template.app.game.Rebirth
 
 @Composable
 private fun XPanel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
@@ -243,6 +244,15 @@ fun TesterScreen(app: AppState) {
         }
 
         XPanel {
+            Text("REBIRTHS  ·  now ${s.rebirths}", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NeonButton("+1 FREE", { act("Rebirth count raised (nothing lost).") { s.devSetRebirths(s.rebirths + 1) } }, Modifier.weight(1f).height(44.dp), accent = Neon.Lime)
+                NeonButton("-1", { act("Rebirth count lowered.") { s.devSetRebirths(s.rebirths - 1) } }, Modifier.weight(1f).height(44.dp), accent = Neon.Pink)
+                NeonButton("SET 0", { act("Rebirths reset to 0.") { s.devSetRebirths(0) } }, Modifier.weight(1f).height(44.dp), accent = Neon.Pink)
+            }
+        }
+
+        XPanel {
             Text("IN-GAME CHEATS (your own games)", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
             ToggleRow("No power cooldowns", s.devNoCooldown) { s.devSetNoCooldown(it) }
             ToggleRow("God mode (always shielded)", s.devGod) { s.devSetGod(it) }
@@ -257,5 +267,73 @@ private fun ToggleRow(label: String, value: Boolean, onChange: (Boolean) -> Unit
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = Neon.Text, modifier = Modifier.weight(1f))
         Switch(checked = value, onCheckedChange = onChange)
+    }
+}
+
+// ------------------------------------------------------------------ rebirth
+
+@Composable
+fun RebirthScreen(app: AppState) {
+    val s = app.settings
+    var confirming by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    val done = s.rebirths
+    val cost = s.rebirthCost()
+    ScreenFrame("Rebirth", onBack = { app.back() }) {
+        XPanel {
+            Text("YOUR REBIRTHS: $done of ${Rebirth.MAX}", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
+            Text(
+                "Coin bonus on every run: +${(done * 25)}%   ·   Start-of-life speed burst: " +
+                    (if (done == 0) "none" else "${Rebirth.startBoost(done).toInt()} s"),
+                color = Neon.Text,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+            )
+        }
+        if (cost == null) {
+            Text("You have reached the last rebirth. Nothing left to unlock!", color = Neon.Lime, fontWeight = FontWeight.Bold)
+        } else {
+            XPanel {
+                Text("NEXT REBIRTH  ·  needs $cost coins", color = Neon.Pink, fontWeight = FontWeight.Black, fontSize = 13.sp)
+                Text("You gain: +${(done + 1) * 25}% coins and a ${Rebirth.startBoost(done + 1).toInt()} s speed burst at the start of every life.", color = Neon.Lime, fontSize = 13.sp)
+                Text("You lose: ALL your coins and every skin you bought (you keep the two free skins).", color = Neon.Pink, fontSize = 13.sp)
+                Text("You keep: powers, tank upgrades, scores, quests and codes.", color = Neon.Dim, fontSize = 13.sp)
+                if (!confirming) {
+                    NeonButton(
+                        if (s.canRebirth()) "REBIRTH" else "NEED ${cost - s.coins} MORE COINS  (you have ${s.coins})",
+                        { if (s.canRebirth()) confirming = true },
+                        Modifier.fillMaxWidth().height(48.dp),
+                        primary = s.canRebirth(),
+                        accent = Neon.Pink,
+                    )
+                } else {
+                    Text("Are you sure? This cannot be undone.", color = Neon.Pink, fontWeight = FontWeight.Black)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        NeonButton(
+                            "YES, REBIRTH",
+                            {
+                                if (s.rebirth()) {
+                                    app.audio.play(Sfx.FANFARE)
+                                    message = "Reborn! Rebirth ${s.rebirths} unlocked."
+                                }
+                                confirming = false
+                            },
+                            Modifier.weight(1f).height(48.dp),
+                            accent = Neon.Pink,
+                        )
+                        NeonButton("CANCEL", { confirming = false }, Modifier.weight(1f).height(48.dp), primary = false)
+                    }
+                }
+            }
+        }
+        if (message.isNotEmpty()) Text(message, color = Neon.Lime, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        XPanel {
+            Text("ALL REBIRTH COSTS", color = Neon.Dim, fontSize = 11.sp, letterSpacing = 1.sp)
+            Text(
+                Rebirth.costs.mapIndexed { i, c -> if (i < done) "$c ✓" else "$c" }.joinToString("  ·  "),
+                color = Neon.Text,
+                fontSize = 13.sp,
+            )
+        }
     }
 }

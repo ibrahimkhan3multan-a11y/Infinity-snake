@@ -10,6 +10,7 @@ import com.ncorti.kotlin.template.app.audio.Sfx
 import com.ncorti.kotlin.template.app.data.Settings
 import com.ncorti.kotlin.template.app.game.Powers
 import com.ncorti.kotlin.template.app.game.Skins
+import com.ncorti.kotlin.template.app.game.Rebirth
 import com.ncorti.kotlin.template.app.net.FoundHost
 import com.ncorti.kotlin.template.app.net.LanDiscovery
 import com.ncorti.kotlin.template.app.net.LocalRelay
@@ -17,7 +18,7 @@ import com.ncorti.kotlin.template.app.net.Protocol
 import com.ncorti.kotlin.template.app.net.RelayClient
 import org.json.JSONObject
 
-enum class Screen { MENU, PLAYING, SKINS, SHOP, SETTINGS, HOWTO, ONLINE, QUESTS, CODES, TESTER }
+enum class Screen { MENU, PLAYING, SKINS, SHOP, SETTINGS, HOWTO, ONLINE, QUESTS, CODES, TESTER, REBIRTH }
 
 /**
  * Process-wide UI state. The activity handles configuration changes itself (see the manifest), so
@@ -183,6 +184,7 @@ class AppState(
                     val hello = Protocol.hello(
                         settings.playerName, skin.head, skin.tail, skin.glow, skin.rainbow, settings.tankLevel,
                         IntArray(Powers.all.size) { settings.powerLevel(Powers.all[it].id) },
+                        Rebirth.startBoost(settings.rebirths),
                     )
                     startOnline(OnlineRoom(p.client, f.optString("code"), false, hello = hello))
                     return

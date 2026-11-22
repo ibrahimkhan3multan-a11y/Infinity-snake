@@ -11,6 +11,7 @@ import com.ncorti.kotlin.template.app.game.Challenges
 import com.ncorti.kotlin.template.app.game.Codes
 import com.ncorti.kotlin.template.app.game.Quest
 import com.ncorti.kotlin.template.app.game.Quests
+import com.ncorti.kotlin.template.app.game.Rebirth
 import com.ncorti.kotlin.template.app.game.RunStats
 import com.ncorti.kotlin.template.app.game.Power
 import com.ncorti.kotlin.template.app.game.Powers
@@ -28,6 +29,9 @@ class Settings(context: Context) {
     var coins by mutableIntStateOf(sp.getInt("coins", 0))
         private set
     var gamesPlayed by mutableIntStateOf(sp.getInt("games", 0))
+        private set
+    /** How many times you have been reborn (see [Rebirth]). */
+    var rebirths by mutableIntStateOf(sp.getInt("rebirths", 0))
         private set
 
     var selectedSkin by mutableIntStateOf(sp.getInt("skin", 0))
@@ -183,7 +187,7 @@ class Settings(context: Context) {
 
     /** Records a finished run: high score, best rank (arena only), games and earned coins. */
     fun recordRun(score: Int, rank: Int, solo: Boolean, kills: Int = 0): Int {
-        val earned = score / 4 + kills * 5
+        val earned = ((score / 4 + kills * 5) * Rebirth.coinMultiplier(rebirths)).toInt()
         highScore = maxOf(highScore, score)
         if (!solo && (bestRank == 0 || rank < bestRank)) bestRank = rank
         coins += earned
@@ -197,6 +201,35 @@ class Settings(context: Context) {
         return earned
     }
 
+
+    // ---------------------------------------------------------------- rebirth
+
+    fun rebirthCost(): Int? = Rebirth.cost(rebirths)
+    fun canRebirth(): Boolean = rebirthCost()?.let { coins >= it } ?: false
+
+    /**
+     * Starts over: you lose ALL coins and every skin except the two free ones, and gain the next
+     * rebirth's bonuses. Powers, upgrades, scores and quests are kept. False if you can't afford it.
+     */
+    fun rebirth(): Boolean {
+        if (!canRebirth()) return false
+        coins = 0
+        unlocked = setOf(0, 1)
+        selectedSkin = 0
+        rebirths += 1
+        sp.edit()
+            .putInt("coins", 0)
+            .putString("unlocked", "0,1")
+            .putInt("skin", 0)
+            .putInt("rebirths", rebirths)
+            .apply()
+        return true
+    }
+
+    fun devSetRebirths(n: Int) {
+        rebirths = n.coerceIn(0, Rebirth.MAX)
+        sp.edit().putInt("rebirths", rebirths).apply()
+    }
 
     // ---------------------------------------------------------------- daily quests
 
