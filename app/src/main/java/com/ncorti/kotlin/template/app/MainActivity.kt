@@ -26,6 +26,8 @@ import com.ncorti.kotlin.template.app.ui.MenuScreen
 import com.ncorti.kotlin.template.app.ui.OnlineScreen
 import com.ncorti.kotlin.template.app.ui.QuestsScreen
 import com.ncorti.kotlin.template.app.ui.RebirthScreen
+import com.ncorti.kotlin.template.app.ui.BackupScreen
+import com.ncorti.kotlin.template.app.ui.ModMenu
 import com.ncorti.kotlin.template.app.ui.SettingsScreen
 import com.ncorti.kotlin.template.app.ui.ShopScreen
 import com.ncorti.kotlin.template.app.ui.SkinsScreen
@@ -87,6 +89,7 @@ class MainActivity : ComponentActivity() {
 private fun Root(app: AppState) {
     BackHandler(enabled = app.screen != Screen.MENU && app.screen != Screen.PLAYING) { app.back() }
     CompositionLocalProvider(LocalAudio provides app.audio) {
+        androidx.compose.foundation.layout.Box {
         Crossfade(targetState = app.screen, animationSpec = tween(220), label = "screens") { screen ->
             when (screen) {
                 Screen.MENU -> MenuScreen(app)
@@ -100,7 +103,10 @@ private fun Root(app: AppState) {
                 Screen.CODES -> CodesScreen(app)
                 Screen.TESTER -> TesterScreen(app)
                 Screen.REBIRTH -> RebirthScreen(app)
+                Screen.BACKUP -> BackupScreen(app)
             }
+        }
+        ModMenu(app)
         }
     }
 }

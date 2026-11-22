@@ -23,7 +23,7 @@ class CodeReward(
 
 object Codes {
     /** Typing this on the Codes screen opens the tester menu instead of redeeming anything. */
-    const val SECRET = "IBRAHIM-TEST-7"
+    const val SECRET = "TEST"
 
     private val rewards: Map<String, CodeReward> = mapOf(
         "STARTER" to CodeReward(coins = 100),

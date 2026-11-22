@@ -202,6 +202,55 @@ class Settings(context: Context) {
     }
 
 
+    // ---------------------------------------------------------------- backup and restore
+
+    /**
+     * Everything saved on this phone as one line of text, so progress can be kept across a reinstall
+     * or moved to another phone. Paste it into Restore on the new install.
+     */
+    fun exportBackup(): String {
+        val o = org.json.JSONObject()
+        for ((k, v) in sp.all) {
+            val entry = org.json.JSONArray()
+            when (v) {
+                is Int -> entry.put("i").put(v)
+                is Long -> entry.put("l").put(v)
+                is Float -> entry.put("f").put(v.toDouble())
+                is Boolean -> entry.put("b").put(v)
+                is String -> entry.put("s").put(v)
+                else -> continue
+            }
+            o.put(k, entry)
+        }
+        val bytes = o.toString().toByteArray(Charsets.UTF_8)
+        return BACKUP_PREFIX + android.util.Base64.encodeToString(bytes, android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP)
+    }
+
+    /** Replaces everything saved with the backup. False (and nothing changed) if the text isn't a backup. */
+    fun importBackup(code: String): Boolean {
+        val text = code.trim().filter { !it.isWhitespace() }
+        if (!text.startsWith(BACKUP_PREFIX)) return false
+        val o = try {
+            val raw = android.util.Base64.decode(text.removePrefix(BACKUP_PREFIX), android.util.Base64.URL_SAFE)
+            org.json.JSONObject(String(raw, Charsets.UTF_8))
+        } catch (e: Exception) {
+            return false
+        }
+        val ed = sp.edit().clear()
+        for (k in o.keys()) {
+            val e = o.optJSONArray(k) ?: return false
+            when (e.optString(0)) {
+                "i" -> ed.putInt(k, e.getInt(1))
+                "l" -> ed.putLong(k, e.getLong(1))
+                "f" -> ed.putFloat(k, e.getDouble(1).toFloat())
+                "b" -> ed.putBoolean(k, e.getBoolean(1))
+                "s" -> ed.putString(k, e.getString(1))
+                else -> return false
+            }
+        }
+        return ed.commit()
+    }
+
     // ---------------------------------------------------------------- rebirth
 
     fun rebirthCost(): Int? = Rebirth.cost(rebirths)
@@ -305,7 +354,10 @@ class Settings(context: Context) {
     }
 
     fun redeem(raw: String): Redeem {
-        if (Codes.isSecret(raw)) return Redeem.Secret
+        if (Codes.isSecret(raw)) {
+            devUnlock()
+            return Redeem.Secret
+        }
         val code = Codes.normalize(raw)
         val reward = Codes.find(raw) ?: return Redeem.Invalid
         if (code in redeemedNames) return Redeem.Used
@@ -335,6 +387,32 @@ class Settings(context: Context) {
         private set
     var devBigStart by mutableStateOf(sp.getBoolean("dev_big", false))
         private set
+
+    /** True once the tester code was entered: the floating mod-menu button may be shown. */
+    var devUnlocked by mutableStateOf(sp.getBoolean("dev_unlocked", false))
+        private set
+    /** Whether the floating button is currently on screen. */
+    var devButton by mutableStateOf(sp.getBoolean("dev_button", false))
+        private set
+    /** Saved position of the floating button in pixels (-1 = not placed yet). */
+    var devX by mutableFloatStateOf(sp.getFloat("dev_x", -1f))
+        private set
+    var devY by mutableFloatStateOf(sp.getFloat("dev_y", -1f))
+        private set
+
+    fun devUnlock() {
+        devUnlocked = true
+        devButton = true
+        sp.edit().putBoolean("dev_unlocked", true).putBoolean("dev_button", true).apply()
+    }
+
+    fun devSetButton(v: Boolean) { devButton = v; sp.edit().putBoolean("dev_button", v).apply() }
+
+    fun devSetPos(x: Float, y: Float) {
+        devX = x
+        devY = y
+        sp.edit().putFloat("dev_x", x).putFloat("dev_y", y).apply()
+    }
 
     fun devSetNoCooldown(v: Boolean) { devNoCooldown = v; sp.edit().putBoolean("dev_nocd", v).apply() }
     fun devSetGod(v: Boolean) { devGod = v; sp.edit().putBoolean("dev_god", v).apply() }
@@ -420,5 +498,6 @@ class Settings(context: Context) {
 
     companion object {
         const val DAILY_COINS = 25
+        const val BACKUP_PREFIX = "IS1-"
     }
 }

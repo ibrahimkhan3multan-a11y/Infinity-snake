@@ -766,6 +766,61 @@ class GameFlowTest {
     }
 
     @Test
+    fun backupCodeRestoresEverythingAndRejectsJunk() {
+        onApp { app, _ ->
+            val s = app.settings
+            s.devAddCoins(321)
+            s.devSetAllPowers(2)
+            s.devSetRebirths(2)
+        }
+        val code = onApp { app, _ -> app.settings.exportBackup() }
+        assertTrue("backup has our prefix", code.startsWith("IS1-"))
+        // Wipe the saved data, as a fresh install would have it, then restore from the text.
+        val sp = context.getSharedPreferences("infinity_snake", Context.MODE_PRIVATE)
+        sp.edit().clear().commit()
+        assertEquals(0, sp.getInt("coins", 0))
+        assertFalse("junk is refused", onApp { app, _ -> app.settings.importBackup("hello") })
+        assertFalse("broken backup is refused", onApp { app, _ -> app.settings.importBackup("IS1-@@@@") })
+        assertTrue("backup restores", onApp { app, _ -> app.settings.importBackup(code) })
+        assertEquals(321, sp.getInt("coins", 0))
+        assertEquals(2, sp.getInt("plevel_shield", 0))
+        assertEquals(2, sp.getInt("rebirths", 0))
+        assertEquals("tank was maxed by the power helper", com.ncorti.kotlin.template.app.game.Powers.TANK_MAX, sp.getInt("tank", 0))
+    }
+
+    @Test
+    fun modMenuButtonIsDraggableAndCanBeHidden() {
+        onApp { app, _ ->
+            assertFalse("hidden until the tester code is used", app.settings.devButton)
+            assertTrue(app.settings.redeem("test") is com.ncorti.kotlin.template.app.data.Settings.Redeem.Secret)
+        }
+        assertTrue("floating button appears", device.wait(Until.hasObject(By.desc("Mod menu")), 15_000))
+        shot("31_mod_button")
+
+        // Drag it somewhere else.
+        val before = device.findObject(By.desc("Mod menu")).visibleBounds
+        device.findObject(By.desc("Mod menu")).drag(android.graphics.Point(before.centerX() - 300, before.centerY() - 150), 500)
+        pad(500)
+        val after = device.findObject(By.desc("Mod menu")).visibleBounds
+        assertTrue("button moved: $before -> $after", kotlin.math.abs(after.centerX() - before.centerX()) > 80)
+        assertTrue("position was saved", onApp { app, _ -> app.settings.devX >= 0f })
+
+        // Open it, give coins, hide it.
+        device.findObject(By.desc("Mod menu")).click()
+        waitFor("MOD MENU")
+        shot("32_mod_menu_open")
+        click("+1000")
+        assertEquals(1000, onApp { app, _ -> app.settings.coins })
+        click("HIDE")
+        assertTrue("button gone", device.wait(Until.gone(By.desc("Mod menu")), 10_000))
+        assertFalse(onApp { app, _ -> app.settings.devButton })
+
+        // The tester code brings it back.
+        onApp { app, _ -> app.settings.redeem("TEST") }
+        assertTrue("button is back", device.wait(Until.hasObject(By.desc("Mod menu")), 10_000))
+    }
+
+    @Test
     fun challengesAndDailyRewardWork() {
         val s = Settings(context)
         assertTrue(s.canClaimDaily())

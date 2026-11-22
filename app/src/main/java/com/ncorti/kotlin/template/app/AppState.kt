@@ -18,7 +18,7 @@ import com.ncorti.kotlin.template.app.net.Protocol
 import com.ncorti.kotlin.template.app.net.RelayClient
 import org.json.JSONObject
 
-enum class Screen { MENU, PLAYING, SKINS, SHOP, SETTINGS, HOWTO, ONLINE, QUESTS, CODES, TESTER, REBIRTH }
+enum class Screen { MENU, PLAYING, SKINS, SHOP, SETTINGS, HOWTO, ONLINE, QUESTS, CODES, TESTER, REBIRTH, BACKUP }
 
 /**
  * Process-wide UI state. The activity handles configuration changes itself (see the manifest), so

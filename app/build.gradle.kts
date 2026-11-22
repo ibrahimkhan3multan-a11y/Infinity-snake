@@ -20,8 +20,10 @@ android {
 
         applicationId = APP_ID
         targetSdk = libs.versions.target.sdk.version.get().toInt()
-        versionCode = APP_VERSION_CODE.toInt()
-        versionName = APP_VERSION_NAME
+        // Every CI run gets a higher versionCode, so a new APK always counts as an update.
+        val runNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+        versionCode = if (runNumber != null) 1000 + runNumber else APP_VERSION_CODE.toInt()
+        versionName = if (runNumber != null) "$APP_VERSION_NAME.$runNumber" else APP_VERSION_NAME
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures {
@@ -30,6 +32,16 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+    // One fixed key for every build. Without it each CI run signs with a fresh random key, and
+    // Android refuses to install a new APK over an old one ("App not installed"), losing progress.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("infinity-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
     buildTypes {
         getByName("release") {

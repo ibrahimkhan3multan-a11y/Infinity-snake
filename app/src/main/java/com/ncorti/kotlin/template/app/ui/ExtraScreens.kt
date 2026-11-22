@@ -254,6 +254,7 @@ fun TesterScreen(app: AppState) {
 
         XPanel {
             Text("IN-GAME CHEATS (your own games)", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
+            ToggleRow("Floating mod button", s.devButton) { s.devSetButton(it) }
             ToggleRow("No power cooldowns", s.devNoCooldown) { s.devSetNoCooldown(it) }
             ToggleRow("God mode (always shielded)", s.devGod) { s.devSetGod(it) }
             ToggleRow("Start big (mass 400)", s.devBigStart) { s.devSetBigStart(it) }
@@ -334,6 +335,102 @@ fun RebirthScreen(app: AppState) {
                 color = Neon.Text,
                 fontSize = 13.sp,
             )
+        }
+    }
+}
+
+// ------------------------------------------------------------------ backup and restore
+
+@Composable
+fun BackupScreen(app: AppState) {
+    val s = app.settings
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var code by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+    var good by remember { mutableStateOf(false) }
+    var restored by remember { mutableStateOf(false) }
+    var mine by remember { mutableStateOf("") }
+
+    androidx.compose.runtime.LaunchedEffect(restored) {
+        if (restored) {
+            kotlinx.coroutines.delay(1800)
+            // The saved data was replaced, so start fresh from it.
+            android.os.Process.killProcess(android.os.Process.myPid())
+        }
+    }
+
+    ScreenFrame("Backup & Restore", onBack = { app.back() }) {
+        XPanel {
+            Text("BACK UP YOUR PROGRESS", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
+            Text(
+                "Makes one line of text with your coins, skins, powers, scores and quests. Keep it somewhere safe " +
+                    "(send it to yourself), then paste it into Restore after a reinstall or on a new phone.",
+                color = Neon.Text, fontSize = 13.sp,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NeonButton(
+                    "COPY BACKUP",
+                    {
+                        mine = s.exportBackup()
+                        val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("Infinity Snake backup", mine))
+                        good = true
+                        message = "Backup copied. Paste it somewhere safe."
+                    },
+                    Modifier.weight(1f).height(46.dp),
+                    accent = Neon.Lime,
+                )
+                NeonButton(
+                    "SHARE BACKUP",
+                    {
+                        mine = s.exportBackup()
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_TEXT, mine)
+                        }
+                        context.startActivity(android.content.Intent.createChooser(send, "Share backup").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    },
+                    Modifier.weight(1f).height(46.dp),
+                    accent = Neon.Cyan,
+                )
+            }
+            if (mine.isNotEmpty()) {
+                Text("Your backup (${mine.length} characters):", color = Neon.Dim, fontSize = 11.sp)
+                androidx.compose.foundation.text.selection.SelectionContainer {
+                    Text(mine.take(90) + "…", color = Neon.Text, fontSize = 11.sp)
+                }
+            }
+        }
+        XPanel {
+            Text("RESTORE", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 13.sp)
+            Text("Paste a backup here. This replaces everything saved on this phone.", color = Neon.Text, fontSize = 13.sp)
+            OutlinedTextField(
+                value = code,
+                onValueChange = { code = it },
+                singleLine = true,
+                label = { Text("Backup text") },
+                colors = codeFieldColors(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            NeonButton(
+                "RESTORE",
+                {
+                    if (s.importBackup(code)) {
+                        good = true
+                        message = "Restored! The app will close. Open it again to continue."
+                        restored = true
+                    } else {
+                        good = false
+                        message = "That isn't a valid backup."
+                    }
+                },
+                Modifier.fillMaxWidth().height(46.dp),
+                primary = code.isNotBlank(),
+                accent = Neon.Pink,
+            )
+        }
+        if (message.isNotEmpty()) {
+            Text(message, color = if (good) Neon.Lime else Neon.Pink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
     }
 }

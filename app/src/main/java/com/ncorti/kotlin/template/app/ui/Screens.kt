@@ -59,6 +59,7 @@ fun SettingsScreen(app: AppState) {
                 ChipsRow("Graphics quality", listOf("Low", "Medium", "High"), s.quality) { s.updateQuality(it) }
             }
         }
+        NeonButton("BACKUP & RESTORE", { app.open(com.ncorti.kotlin.template.app.Screen.BACKUP) }, Modifier.fillMaxWidth().height(44.dp), accent = Neon.Cyan)
         NeonButton("REDEEM A CODE", { app.open(com.ncorti.kotlin.template.app.Screen.CODES) }, Modifier.fillMaxWidth().height(44.dp), accent = Neon.Lime)
         Text(
             "Walls apply to new games. Everything is stored on this device only.",
