@@ -808,6 +808,7 @@ class GameFlowTest {
         // Open it, give coins, hide it.
         device.findObject(By.desc("Mod menu")).click()
         waitFor("MOD MENU")
+        pad(1200) // let the panel finish drawing before the screenshot
         shot("32_mod_menu_open")
         click("+1000")
         assertEquals(1000, onApp { app, _ -> app.settings.coins })
