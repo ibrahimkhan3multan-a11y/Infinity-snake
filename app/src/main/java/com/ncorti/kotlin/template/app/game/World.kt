@@ -55,6 +55,32 @@ class World(
     var time = 0f
         private set
 
+    /** One of [GameMode]. Set right after creating the world (the host picks it). */
+    var mode = GameMode.CLASSIC
+        set(v) {
+            field = v
+            speedMul = if (v == GameMode.FRENZY) Cfg.FRENZY_SPEED else 1f
+        }
+
+    /** Current wall radius. Equals [Cfg.ARENA_RADIUS] except in Shrinking Arena. */
+    var radius = Cfg.ARENA_RADIUS
+
+    /** Everybody's speed multiplier (Food Frenzy). */
+    var speedMul = 1f
+        private set
+
+    // Falling bombs. bt > 0: still falling (the warning circle shows); bt <= 0: just exploded.
+    val bx = FloatArray(Cfg.MAX_BOMBS)
+    val by = FloatArray(Cfg.MAX_BOMBS)
+    val bt = FloatArray(Cfg.MAX_BOMBS)
+    private val bdone = BooleanArray(Cfg.MAX_BOMBS)
+    var bombCount = 0
+        private set
+    private var bombTimer = 2.5f
+
+    /** Sounds/effects hook: set by the session, called when a bomb blows up. */
+    var onBomb: ((Float, Float) -> Unit)? = null
+
     private var killer = IntArray(32)
     private val tmp = FloatArray(2)
 
@@ -196,7 +222,7 @@ class World(
 
     private fun spawnCluster() {
         val a = rnd.nextFloat() * TWO_PI
-        val d = sqrt(rnd.nextFloat()) * (Cfg.ARENA_RADIUS - 60f)
+        val d = sqrt(rnd.nextFloat()) * (radius - 60f)
         val cx = cos(a) * d
         val cy = sin(a) * d
         val count = 1 + rnd.nextInt(4)
@@ -254,10 +280,119 @@ class World(
 
     // ---------------------------------------------------------------- step
 
+    /** Advances only the clock (guests mirror the host and never simulate). */
+    fun tickVisual(dt: Float) {
+        time += dt
+    }
+
+    /** Replaces the bomb list with what the host sent: flat [x, y, t, x, y, t, ...]. */
+    fun setBombs(flat: org.json.JSONArray?) {
+        bombCount = 0
+        if (flat == null) return
+        var i = 0
+        while (i + 2 < flat.length() && bombCount < Cfg.MAX_BOMBS) {
+            bx[bombCount] = flat.getDouble(i).toFloat()
+            by[bombCount] = flat.getDouble(i + 1).toFloat()
+            bt[bombCount] = flat.getDouble(i + 2).toFloat()
+            bombCount++
+            i += 3
+        }
+    }
+
+    /** Smallest wall radius in Shrinking Arena. */
+    private fun stepMode(dt: Float, n: Int) {
+        if (mode == GameMode.SHRINK) {
+            val k = (time / Cfg.SHRINK_SECONDS).coerceIn(0f, 1f)
+            radius = Cfg.ARENA_RADIUS + (Cfg.SHRINK_MIN - Cfg.ARENA_RADIUS) * k
+        }
+        if (mode != GameMode.BOMBS) return
+
+        // Fuses burn down; at zero the bomb blows up, then lingers briefly for its blast effect.
+        var i = 0
+        while (i < bombCount) {
+            val wasFalling = bt[i] > 0f
+            bt[i] -= dt
+            if (wasFalling && bt[i] <= 0f && !bdone[i]) {
+                bdone[i] = true
+                explode(bx[i], by[i], n)
+            }
+            if (bt[i] < -Cfg.BOMB_LINGER) {
+                val last = bombCount - 1
+                bx[i] = bx[last]
+                by[i] = by[last]
+                bt[i] = bt[last]
+                bdone[i] = bdone[last]
+                bombCount--
+            } else {
+                i++
+            }
+        }
+
+        bombTimer -= dt
+        if (bombTimer <= 0f) {
+            val spread = (time / 120f).coerceIn(0f, 1f)
+            bombTimer = Cfg.BOMB_EVERY_START - (Cfg.BOMB_EVERY_START - Cfg.BOMB_EVERY_END) * spread
+            dropBomb()
+        }
+    }
+
+    private fun dropBomb() {
+        if (bombCount >= Cfg.MAX_BOMBS) return
+        var alive = 0
+        for (j in 0 until snakes.size) if (snakes[j].alive) alive++
+        var x: Float
+        var y: Float
+        if (alive > 0 && rnd.nextFloat() < 0.8f) {
+            var pick = rnd.nextInt(alive)
+            var t = snakes[0]
+            for (j in 0 until snakes.size) {
+                if (!snakes[j].alive) continue
+                if (pick-- == 0) {
+                    t = snakes[j]
+                    break
+                }
+            }
+            // Aim a little ahead of where the snake is going, so it has to react.
+            val ahead = Cfg.BASE_SPEED * Cfg.BOMB_FUSE * 0.5f * rnd.nextFloat()
+            x = t.xs[0] + cos(t.angle) * ahead + (rnd.nextFloat() - 0.5f) * 160f
+            y = t.ys[0] + sin(t.angle) * ahead + (rnd.nextFloat() - 0.5f) * 160f
+        } else {
+            val a = rnd.nextFloat() * TWO_PI
+            val d = sqrt(rnd.nextFloat()) * radius * 0.9f
+            x = cos(a) * d
+            y = sin(a) * d
+        }
+        val d = sqrt(x * x + y * y)
+        val lim = radius - 80f
+        if (d > lim) {
+            x *= lim / d
+            y *= lim / d
+        }
+        bx[bombCount] = x
+        by[bombCount] = y
+        bt[bombCount] = Cfg.BOMB_FUSE
+        bdone[bombCount] = false
+        bombCount++
+    }
+
+    private fun explode(x: Float, y: Float, n: Int) {
+        onBomb?.invoke(x, y)
+        val r2 = Cfg.BOMB_RADIUS * Cfg.BOMB_RADIUS
+        for (i in 0 until n) {
+            val s = snakes[i]
+            if (!s.alive || s.grace > 0f || s.shield > 0f || killer[i] != NONE) continue
+            val dx = s.xs[0] - x
+            val dy = s.ys[0] - y
+            val rr = Cfg.BOMB_RADIUS + s.radius * 0.5f
+            if (dx * dx + dy * dy < rr * rr && r2 > 0f) killer[i] = WALL
+        }
+    }
+
     fun step(dt: Float) {
         time += dt
         val n = snakes.size
         for (i in 0 until n) killer[i] = NONE
+        stepMode(dt, n)
 
         // Freeze: slow every other snake close to a freezer.
         for (i in 0 until n) {
@@ -294,10 +429,13 @@ class World(
 
             val hx = s.xs[0]
             val hy = s.ys[0]
-            val lim = Cfg.ARENA_RADIUS - s.radius
+            val lim = radius - s.radius
             val d2 = hx * hx + hy * hy
             if (d2 > lim * lim) {
-                if (deadlyWalls && s.grace <= 0f && s.shield <= 0f) {
+                val ring = mode == GameMode.SHRINK && radius < Cfg.ARENA_RADIUS - 1f
+                if (ring && s.grace <= 0f) {
+                    killer[i] = WALL
+                } else if (deadlyWalls && s.grace <= 0f && s.shield <= 0f) {
                     killer[i] = WALL
                 } else {
                     val k = lim / sqrt(d2)
@@ -392,7 +530,7 @@ class World(
         var tries = 0
         while (true) {
             val a = rnd.nextFloat() * TWO_PI
-            val d = sqrt(rnd.nextFloat()) * Cfg.ARENA_RADIUS * 0.8f
+            val d = sqrt(rnd.nextFloat()) * radius * 0.8f
             val x = cos(a) * d
             val y = sin(a) * d
             var ok = true
@@ -465,8 +603,8 @@ class World(
         for (step in 1..3) {
             val px = hx + ca * look * step / 3f
             val py = hy + sa * look * step / 3f
-            if (deadlyWalls) {
-                val dw = Cfg.ARENA_RADIUS - sqrt(px * px + py * py) - b.radius
+            if (deadlyWalls || mode == GameMode.SHRINK) {
+                val dw = radius - sqrt(px * px + py * py) - b.radius
                 if (dw < minC) minC = dw
             }
             for (j in 0 until snakes.size) {

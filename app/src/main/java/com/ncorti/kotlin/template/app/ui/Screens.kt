@@ -56,6 +56,7 @@ fun SettingsScreen(app: AppState) {
                     Text("How quickly your snake turns toward where you steer.", color = Neon.Dim, fontSize = 12.sp)
                 }
                 ChipsRow("Controls", listOf("Joystick", "Touch & drag"), s.controlMode) { s.updateControlMode(it) }
+                ChipsRow("Camera view (3D tilt, like a city-chase game)", listOf("Flat top-down", "3D tilt"), if (s.view3d) 1 else 0) { s.updateView3d(it == 1) }
                 ChipsRow("Graphics quality", listOf("Low", "Medium", "High"), s.quality) { s.updateQuality(it) }
             }
         }

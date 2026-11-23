@@ -109,6 +109,8 @@ fun OnlineScreen(app: AppState) {
                     Text("Add ${Cfg.ONLINE_BOTS} bots", color = Neon.Text, modifier = Modifier.weight(1f))
                     Switch(checked = withBots, onCheckedChange = { withBots = it })
                 }
+                Text("Game mode (everyone joining plays it):", color = Neon.Dim, fontSize = 12.sp)
+                ModeChips(app)
                 NeonButton(
                     "HOST ON WI-FI",
                     { app.hostOnWifi(if (withBots) Cfg.ONLINE_BOTS else 0) },

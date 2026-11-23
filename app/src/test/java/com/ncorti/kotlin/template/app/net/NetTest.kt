@@ -187,4 +187,20 @@ class NetTest {
         assertEquals("ws://x.y", RelayClient.normalize(" http://x.y "))
         assertEquals("wss://x.y/z", RelayClient.normalize("wss://x.y/z"))
     }
+
+    @Test
+    fun guestPlaysTheHostsModeAndSeesBombs() {
+        val r = Room(bots = 0)
+        r.hostWorld.mode = com.ncorti.kotlin.template.app.game.GameMode.BOMBS
+        var sawBombs = false
+        var booms = 0
+        r.guestWorld.onBomb = { _, _ -> booms++ }
+        repeat(12) {
+            r.run(1f)
+            if (r.guestWorld.bombCount > 0) sawBombs = true
+        }
+        assertEquals(com.ncorti.kotlin.template.app.game.GameMode.BOMBS, r.guestWorld.mode)
+        assertTrue(sawBombs)
+        assertTrue(booms > 0)
+    }
 }

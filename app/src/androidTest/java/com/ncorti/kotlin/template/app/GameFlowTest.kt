@@ -872,4 +872,36 @@ class GameFlowTest {
         assertTrue("memory growth ${(mem2 - mem1) / 1024} KB", mem2 - mem1 < 48L * 1024 * 1024)
         assertTrue(onApp { app, _ -> app.session!!.world.aliveCount() } >= 2)
     }
+
+    @Test
+    fun modePickerChoosesBombRainAndTheGameUsesIt() {
+        click("MODES")
+        waitFor("Game Modes")
+        shot("20_modes_screen")
+        click("BOMB RAIN")
+        assertEquals(1, onApp { app, _ -> app.settings.gameMode })
+        onApp { app, _ -> app.back() }
+        startSolo()
+        assertEquals(1, onApp { app, _ -> app.session!!.world.mode })
+        pad(1500)
+        shot("21_bomb_rain_game")
+        // Put a bomb right under the player's snake and let it fall: the HUD must keep running.
+        assertTrue(device.hasObject(By.text("BOMB RAIN")))
+        onApp { app, _ -> app.settings.updateGameMode(0) }
+    }
+
+    @Test
+    fun tiltedThreeDViewCanBeSwitchedOnInSettingsAndPlays() {
+        device.wait(Until.hasObject(By.desc("Settings")), 15_000)
+        device.findObject(By.desc("Settings")).click()
+        clickScrolling("3D tilt")
+        assertTrue(onApp { app, _ -> app.settings.view3d })
+        onApp { app, _ -> app.back() }
+        startSolo()
+        onApp { app, _ -> app.session!!.world.player.grace = 1_000_000f }
+        pad(1500)
+        assertTrue("3D camera active", onApp { app, _ -> app.session!!.view3dActive })
+        shot("22_view_3d")
+        onApp { app, _ -> app.settings.updateView3d(false) }
+    }
 }

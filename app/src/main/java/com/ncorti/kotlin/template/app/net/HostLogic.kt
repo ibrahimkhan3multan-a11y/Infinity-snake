@@ -188,6 +188,15 @@ class HostLogic(private val world: World, private val link: NetLink) {
             .put("rk", if (me.alive) world.rankOf(me) else me.lastRank).put("al", world.aliveCount())
             .put("en", Math.round(me.energy * 10f) / 10.0).put("mx", me.maxEnergy.toDouble())
             .put("pw", pw).put("bd", bd).put("sn", sn)
+            .put("md", world.mode).put("rd", Math.round(world.radius))
+        if (world.bombCount > 0) {
+            val bm = JSONArray()
+            for (i in 0 until world.bombCount) {
+                bm.put(Math.round(world.bx[i])).put(Math.round(world.by[i]))
+                    .put(Math.round(world.bt[i] * 100f) / 100.0)
+            }
+            m.put("bm", bm)
+        }
         if (r.snapshotsSent % Protocol.FOOD_EVERY == 0) {
             val fd = JSONArray()
             for (i in 0 until Cfg.FOOD_CAP) {

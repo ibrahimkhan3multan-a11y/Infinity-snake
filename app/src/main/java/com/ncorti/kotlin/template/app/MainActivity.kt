@@ -104,6 +104,7 @@ private fun Root(app: AppState) {
                 Screen.TESTER -> TesterScreen(app)
                 Screen.REBIRTH -> RebirthScreen(app)
                 Screen.BACKUP -> BackupScreen(app)
+                Screen.MODES -> ModesScreen(app)
             }
         }
         ModMenu(app)

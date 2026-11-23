@@ -30,7 +30,7 @@ object BotBrain {
         // 1. Stay away from the arena edge.
         val distC = sqrt(hx * hx + hy * hy)
         val margin = 420f + b.radius * 3f
-        val wallMode = distC > Cfg.ARENA_RADIUS - margin
+        val wallMode = distC > w.radius - margin
         if (wallMode) desired = atan2(-hy, -hx)
 
         // 2. Hard bots hunt smaller snakes nearby.
@@ -129,5 +129,20 @@ object BotBrain {
         val noise = if (level == 0) (w.rnd.nextFloat() - 0.5f) * 0.5f else 0f
         b.targetAngle = chosen + noise
         b.boosting = boost
+
+        // 5. Run from falling bombs (easy bots only notice them half the time).
+        if (w.mode == GameMode.BOMBS && (level >= 1 || w.rnd.nextFloat() < 0.5f)) {
+            val danger = Cfg.BOMB_RADIUS + b.radius + 90f
+            for (i in 0 until w.bombCount) {
+                if (w.bt[i] <= 0f) continue
+                val dx = hx - w.bx[i]
+                val dy = hy - w.by[i]
+                if (dx * dx + dy * dy < danger * danger) {
+                    b.targetAngle = atan2(dy, dx)
+                    b.boosting = b.energy > 20f
+                    break
+                }
+            }
+        }
     }
 }

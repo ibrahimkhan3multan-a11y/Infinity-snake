@@ -49,6 +49,15 @@ class Settings(context: Context) {
     var playerName by mutableStateOf(sp.getString("name", null) ?: "Player${100 + (System.nanoTime() % 900).toInt().let { if (it < 0) -it else it }}")
         private set
     /** Menu mode toggle: false = Arena (with bots), true = Solo. */
+    /** One of GameMode (Classic, Bomb Rain, ...). */
+    var gameMode by mutableStateOf(sp.getInt("game_mode", 0).coerceIn(0, 3))
+        private set
+    /** Tilted 3D camera instead of the flat top-down view. */
+    var view3d by mutableStateOf(sp.getBoolean("view3d", false))
+        private set
+    fun updateGameMode(v: Int) { gameMode = v.coerceIn(0, 3); sp.edit().putInt("game_mode", gameMode).apply() }
+    fun updateView3d(v: Boolean) { view3d = v; sp.edit().putBoolean("view3d", v).apply() }
+
     var soloMode by mutableStateOf(sp.getBoolean("solo_mode", false))
         private set
     var challengeDone by mutableStateOf(parseSet(sp.getString("ch_done", ""), addDefaults = false))

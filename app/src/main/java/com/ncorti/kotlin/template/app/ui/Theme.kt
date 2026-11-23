@@ -49,6 +49,7 @@ object Neon {
     val Cyan = Color(0xFF2DE2E6)
     val Pink = Color(0xFFFF3DAA)
     val Lime = Color(0xFF7CFF3A)
+    val Amber = Color(0xFFFFB02E)
     val Text = Color(0xFFEDE7FF)
     val Dim = Color(0xFF9C93BD)
 }

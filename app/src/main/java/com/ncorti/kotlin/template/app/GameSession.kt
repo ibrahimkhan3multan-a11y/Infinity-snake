@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import com.ncorti.kotlin.template.app.audio.Sfx
 import com.ncorti.kotlin.template.app.game.Cfg
+import com.ncorti.kotlin.template.app.game.GameMode
 import com.ncorti.kotlin.template.app.game.PI_F
 import com.ncorti.kotlin.template.app.game.Particles
 import com.ncorti.kotlin.template.app.game.Power
@@ -99,7 +100,11 @@ class GameSession(
         deadlyWalls = settings.walls,
         playerSkin = Skins.byId(settings.selectedSkin),
         listener = null,
-        ambientFood = if (isGuest) 0 else Cfg.AMBIENT_FOOD,
+        ambientFood = when {
+            isGuest -> 0
+            settings.gameMode == GameMode.FRENZY -> 3600
+            else -> Cfg.AMBIENT_FOOD
+        },
         playerName = settings.playerName,
     )
     private val host: HostLogic? = if (room != null && room.isHost) HostLogic(world, room.client) else null
@@ -136,7 +141,7 @@ class GameSession(
         private set
 
     fun routeToPoint(x: Float, y: Float, name: String = "that spot") {
-        val lim = Cfg.ARENA_RADIUS - 160f
+        val lim = world.radius - 160f
         val d = sqrt(x * x + y * y)
         val k = if (d > lim) lim / d else 1f
         routeX = x * k
@@ -246,6 +251,24 @@ class GameSession(
     var camX = 0f
     var camY = 0f
     var zoom = 1f
+    /** True when the 3D tilted camera is on (Settings). */
+    val view3d: Boolean get() = settings.view3d
+
+    // Set by the renderer each frame while the 3D view is on: screen -> flat sheet mapping.
+    var view3dActive = false
+    val invProj = android.graphics.Matrix()
+    var virtPlayerX = 0f
+    var virtPlayerY = 0f
+    private val pt = FloatArray(2)
+
+    /** Maps a screen point to the flat sheet that the 3D view bends (so steering works under tilt). */
+    fun screenToSheet(x: Float, y: Float): Offset {
+        pt[0] = x
+        pt[1] = y
+        invProj.mapPoints(pt)
+        return Offset(pt[0], pt[1])
+    }
+
     var viewW = 1080f
     var viewH = 1920f
     private var camInit = false
@@ -264,6 +287,8 @@ class GameSession(
 
     init {
         world.listener = this
+        if (!isGuest) world.mode = settings.gameMode
+        world.onBomb = { x, y -> bombBlast(x, y) }
         guest?.sendHello()
         val me = world.player
         me.maxEnergy = Powers.tankCapacity(settings.tankLevel)
@@ -632,6 +657,22 @@ class GameSession(
         hudScore = score
         hudRank = rank
         overTimer = 1.2f
+    }
+
+    /** Name of the running mode, shown in the HUD for non-classic matches. */
+    val modeName: String get() = GameMode.name(world.mode)
+
+    private fun bombBlast(x: Float, y: Float) {
+        if (settings.quality > 0) {
+            particles.burst(x, y, 0xFFFFA040.toInt(), if (settings.quality >= 2) 34 else 16, 340f, 7f, rnd)
+        }
+        val p = world.player
+        val dx = p.xs[0] - x
+        val dy = p.ys[0] - y
+        if (dx * dx + dy * dy < 900f * 900f) {
+            app.audio.play(Sfx.BOOM)
+            if (dx * dx + dy * dy < 420f * 420f) shakeTime = maxOf(shakeTime, 0.25f)
+        }
     }
 
     // ---- WorldListener: effects only, never game logic.

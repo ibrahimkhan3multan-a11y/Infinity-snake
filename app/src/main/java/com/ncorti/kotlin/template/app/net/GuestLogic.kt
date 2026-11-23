@@ -34,6 +34,7 @@ class GuestLogic(
 
     private val ghosts = HashMap<Int, Ghost>()
     private val seen = HashSet<Int>()
+    private val boomed = HashSet<Int>()
     private var meId = -1
     private var sendTimer = 0f
     private var lastAngle = 99f
@@ -143,6 +144,17 @@ class GuestLogic(
             board = list
         }
 
+        world.mode = m.optInt("md", 0)
+        world.radius = m.optDouble("rd", Cfg.ARENA_RADIUS.toDouble()).toFloat()
+        world.setBombs(m.optJSONArray("bm"))
+        val live = HashSet<Int>()
+        for (i in 0 until world.bombCount) {
+            val key = Math.round(world.bx[i]) * 31 + Math.round(world.by[i])
+            live.add(key)
+            if (world.bt[i] <= 0f && boomed.add(key)) world.onBomb?.invoke(world.bx[i], world.by[i])
+        }
+        boomed.retainAll(live)
+
         seen.clear()
         val sn = m.optJSONArray("sn")
         if (sn != null) {
@@ -223,6 +235,7 @@ class GuestLogic(
 
     /** Eases drawn bodies toward the latest snapshot. Returns true if our mass grew (ate something). */
     fun update(dt: Float): Boolean {
+        world.tickVisual(dt)
         val k = 1f - exp(-22f * dt)
         for (g in ghosts.values) {
             val s = g.snake

@@ -34,23 +34,92 @@ class GameRenderer {
     private val borderColor = Color(0xFFFF3DAA)
     private val dotColor = Color(0xFF3A2B66)
 
+    private val src3d = FloatArray(8)
+    private val dst3d = FloatArray(8)
+    private val proj = android.graphics.Matrix()
+
     fun draw(ds: DrawScope, s: GameSession, quality: Int) {
+        val w = ds.size.width
+        val h = ds.size.height
+        s.viewW = w
+        s.viewH = h
+        if (!s.view3d) {
+            s.view3dActive = false
+            drawScene(ds, s, quality, w, h, 0.5f)
+            if (quality >= 1) drawVignette(ds, w, h)
+            return
+        }
+
+        // 3D view: draw the normal flat scene on a bigger virtual sheet, then bend that sheet into a
+        // trapezoid so the far side shrinks toward a horizon (tilted, GTA-style camera).
+        val w2 = w * 1.6f
+        val h2 = h * 1.3f
+        val pf = 0.72f
+        val yTop = h * 0.10f
+        val yBot = h * 1.10f
+        val farHalf = w * 1.05f / 2f
+        val nearHalf = w2 / 2f
+        src3d[0] = 0f; src3d[1] = 0f; src3d[2] = w2; src3d[3] = 0f
+        src3d[4] = w2; src3d[5] = h2; src3d[6] = 0f; src3d[7] = h2
+        dst3d[0] = w / 2f - farHalf; dst3d[1] = yTop; dst3d[2] = w / 2f + farHalf; dst3d[3] = yTop
+        dst3d[4] = w / 2f + nearHalf; dst3d[5] = yBot; dst3d[6] = w / 2f - nearHalf; dst3d[7] = yBot
+        proj.setPolyToPoly(src3d, 0, dst3d, 0, 4)
+        proj.invert(s.invProj)
+        s.view3dActive = true
+        s.virtPlayerX = w2 / 2f
+        s.virtPlayerY = h2 * pf
+
         with(ds) {
-            val w = size.width
-            val h = size.height
-            s.viewW = w
-            s.viewH = h
+            // Sky above the horizon.
+            drawRect(outsideColor)
+            if (quality >= 1) {
+                drawRect(
+                    Brush.verticalGradient(0f to Color(0xFF0B0620), 1f to Color(0xFF3A1A66), startY = 0f, endY = yTop + h * 0.12f),
+                    size = androidx.compose.ui.geometry.Size(w, yTop + h * 0.12f),
+                )
+            }
+            val nc = drawContext.canvas.nativeCanvas
+            nc.save()
+            nc.concat(proj)
+            drawScene(ds, s, quality, w2, h2, pf)
+            nc.restore()
+            if (quality >= 1) {
+                drawRect(
+                    Brush.verticalGradient(0f to Color(0xCC05030B), 1f to Color.Transparent, startY = yTop, endY = yTop + h * 0.22f),
+                    topLeft = Offset(0f, yTop),
+                    size = androidx.compose.ui.geometry.Size(w, h * 0.22f),
+                )
+            }
+        }
+        if (quality >= 1) drawVignette(ds, w, h)
+    }
+
+    private fun drawVignette(ds: DrawScope, w: Float, h: Float) {
+        if (vignette == null || vigW != w || vigH != h) {
+            vignette = Brush.radialGradient(
+                colorStops = arrayOf(0.5f to Color.Transparent, 1f to Color(0xAA000000)),
+                center = Offset(w / 2f, h / 2f),
+                radius = kotlin.math.hypot(w, h) / 2f,
+            )
+            vigW = w
+            vigH = h
+        }
+        ds.drawRect(vignette!!)
+    }
+
+    private fun drawScene(ds: DrawScope, s: GameSession, quality: Int, w: Float, h: Float, pf: Float) {
+        with(ds) {
             val zoom = s.zoom
             val ox = w / 2f - (s.camX + s.shakeX) * zoom
-            val oy = h / 2f - (s.camY + s.shakeY) * zoom
+            val oy = h * pf - (s.camY + s.shakeY) * zoom
             val world = s.world
             val time = world.time
 
-            val arenaR = Cfg.ARENA_RADIUS * zoom
+            val arenaR = world.radius * zoom
             val centre = Offset(ox, oy)
 
             // Arena floor: flat colour with a soft lighter glow in the middle.
-            drawRect(arenaColor)
+            drawRect(arenaColor, Offset(-w, -h), androidx.compose.ui.geometry.Size(3f * w, 3f * h))
             if (quality >= 2) {
                 drawCircle(
                     Brush.radialGradient(
@@ -67,8 +136,8 @@ class GameRenderer {
             val grid = 140f
             val left = s.camX - w / 2f / zoom
             val right = s.camX + w / 2f / zoom
-            val top = s.camY - h / 2f / zoom
-            val bottom = s.camY + h / 2f / zoom
+            val top = s.camY - h * pf / zoom
+            val bottom = s.camY + h * (1f - pf) / zoom
             var gx = kotlin.math.floor(left / grid) * grid
             while (gx <= right) {
                 val sx = ox + gx * zoom
@@ -226,6 +295,34 @@ class GameRenderer {
                 }
             }
 
+            // Bombs: a pulsing red warning circle that fills in as the bomb falls, then a blast.
+            for (bi in 0 until world.bombCount) {
+                val bxs = ox + world.bx[bi] * zoom
+                val bys = oy + world.by[bi] * zoom
+                val br = Cfg.BOMB_RADIUS * zoom
+                if (bxs < -br || bxs > w + br || bys < -br || bys > h + br) continue
+                val t = world.bt[bi]
+                val bc = Offset(bxs, bys)
+                if (t > 0f) {
+                    val k = (t / Cfg.BOMB_FUSE).coerceIn(0f, 1f)
+                    val blink = 0.55f + 0.45f * sin(time * 14f)
+                    drawCircle(Color(0xFFFF2D2D).copy(alpha = 0.10f + 0.10f * blink), br, bc)
+                    drawCircle(Color(0xFFFF4545).copy(alpha = 0.30f * (1f - k) + 0.1f), br * (1f - k), bc)
+                    drawCircle(Color(0xFFFF4545).copy(alpha = 0.55f + 0.35f * blink), br, bc, style = Stroke(width = maxOf(2f, 3f * zoom)))
+                    // The bomb itself, dropping from above.
+                    val drop = k * k * 520f * zoom
+                    val body = Offset(bxs, bys - drop)
+                    drawCircle(Color(0xFF1C1C28), 17f * zoom + 3f, body)
+                    drawCircle(Color(0xFF8A8AA8), 17f * zoom + 3f, body, style = Stroke(width = 2f))
+                    drawCircle(Color(0xFFFFC857), 5f * zoom + 1.5f, Offset(body.x + 8f * zoom, body.y - 17f * zoom - 3f))
+                } else {
+                    val f = ((-t) / Cfg.BOMB_LINGER).coerceIn(0f, 1f)
+                    drawCircle(Color(0xFFFFA040).copy(alpha = 0.6f * (1f - f)), br * (0.55f + 0.45f * f), bc)
+                    drawCircle(Color(0xFFFFE9A8).copy(alpha = 0.9f * (1f - f)), br * 0.5f * (1f - f * 0.5f), bc)
+                    drawCircle(Color(0xFFFFD060).copy(alpha = 0.8f * (1f - f)), br * (0.6f + 0.5f * f), bc, style = Stroke(width = maxOf(2f, 6f * zoom)))
+                }
+            }
+
             // Route to a tapped spot or player: a moving dashed line and a pulsing marker.
             if (s.routeActive && s.world.player.alive) {
                 val me = s.world.player
@@ -253,19 +350,6 @@ class GameRenderer {
                 drawCircle(Color(p.color[i]).copy(alpha = f), p.size[i] * zoom * (0.4f + 0.6f * f), Offset(x, y))
             }
 
-            // Soft vignette pulls the eye to the middle of the screen.
-            if (quality >= 1) {
-                if (vignette == null || vigW != w || vigH != h) {
-                    vignette = Brush.radialGradient(
-                        colorStops = arrayOf(0.5f to Color.Transparent, 1f to Color(0xAA000000)),
-                        center = Offset(w / 2f, h / 2f),
-                        radius = kotlin.math.hypot(w, h) / 2f,
-                    )
-                    vigW = w
-                    vigH = h
-                }
-                drawRect(vignette!!)
-            }
         }
     }
 

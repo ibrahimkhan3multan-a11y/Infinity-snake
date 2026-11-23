@@ -1,6 +1,10 @@
 package com.ncorti.kotlin.template.app.ui
 
 import androidx.compose.foundation.background
+import com.ncorti.kotlin.template.app.game.GameMode
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -431,6 +435,53 @@ fun BackupScreen(app: AppState) {
         }
         if (message.isNotEmpty()) {
             Text(message, color = if (good) Neon.Lime else Neon.Pink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        }
+    }
+}
+
+// ------------------------------------------------------------------ game modes
+
+/** Small mode picker used where space is tight (hosting a room). */
+@Composable
+fun ModeChips(app: AppState) {
+    val s = app.settings
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        for (row in 0 until GameMode.COUNT step 2) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (m in row until minOf(row + 2, GameMode.COUNT)) {
+                    androidx.compose.material3.FilterChip(
+                        selected = s.gameMode == m,
+                        onClick = { s.updateGameMode(m) },
+                        label = { Text(GameMode.short(m), fontSize = 11.sp) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ModesScreen(app: AppState) {
+    val s = app.settings
+    ScreenFrame("Game Modes", onBack = { app.back() }) {
+        Text(
+            "Pick how the next match plays. Hosting on Wi-Fi? Everyone who joins plays the mode you pick.",
+            color = Neon.Dim, fontSize = 13.sp,
+        )
+        for (m in 0 until GameMode.COUNT) {
+            val on = s.gameMode == m
+            XPanel(
+                Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .border(2.dp, if (on) Neon.Lime else Color.Transparent, RoundedCornerShape(14.dp))
+                    .clickable { s.updateGameMode(m); app.audio.play(Sfx.CLICK) },
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(GameMode.name(m).uppercase(), color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    if (on) Text("SELECTED", color = Neon.Lime, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                }
+                Text(GameMode.blurb(m), color = Neon.Dim, fontSize = 12.sp)
+            }
         }
     }
 }

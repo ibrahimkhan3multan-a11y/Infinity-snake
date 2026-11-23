@@ -115,6 +115,7 @@ fun MenuScreen(app: AppState) {
                         SideChip("ONLINE", Neon.Lime, Ico.CROWN) { app.open(Screen.ONLINE) }
                         SideChip("SHOP", Neon.Pink, Ico.BAG) { app.open(Screen.SHOP) }
                         SideChip("SKINS", Neon.Violet, Ico.SNAKE) { app.open(Screen.SKINS) }
+                        SideChip("MODES", Neon.Amber, Ico.TARGET) { app.open(Screen.MODES) }
                         SideChip("HELP", Neon.Cyan, null) { app.open(Screen.HOWTO) }
                         Spacer(Modifier.weight(1f))
                         ModeToggle(solo = s.soloMode) { s.updateSoloMode(it) }
