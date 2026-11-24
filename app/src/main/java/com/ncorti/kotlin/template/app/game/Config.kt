@@ -36,6 +36,17 @@ object Cfg {
     const val BOARD_SIZE = 6
     const val BOT_COUNT = 22
     const val ONLINE_BOTS = 10
+
+    // Game modes
+    const val MAX_BOMBS = 24
+    const val BOMB_FUSE = 2.0f
+    const val BOMB_LINGER = 0.6f
+    const val BOMB_RADIUS = 170f
+    const val BOMB_EVERY_START = 1.6f
+    const val BOMB_EVERY_END = 0.7f
+    const val SHRINK_SECONDS = 180f
+    const val SHRINK_MIN = 1700f
+    const val FRENZY_SPEED = 1.3f
 }
 
 /** Visual and pickup radius of a food item with the given value. */
@@ -72,15 +83,4 @@ fun hsvToArgb(h: Float, s: Float, v: Float): Int {
         ((r * 255f + 0.5f).toInt() shl 16) or
         ((g * 255f + 0.5f).toInt() shl 8) or
         (b * 255f + 0.5f).toInt()
-
-    // Game modes
-    const val MAX_BOMBS = 24
-    const val BOMB_FUSE = 2.0f
-    const val BOMB_LINGER = 0.6f
-    const val BOMB_RADIUS = 170f
-    const val BOMB_EVERY_START = 1.6f
-    const val BOMB_EVERY_END = 0.7f
-    const val SHRINK_SECONDS = 180f
-    const val SHRINK_MIN = 1700f
-    const val FRENZY_SPEED = 1.3f
 }

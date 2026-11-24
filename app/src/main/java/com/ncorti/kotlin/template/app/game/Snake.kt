@@ -131,9 +131,9 @@ class Snake(val id: Int, val isPlayer: Boolean, var name: String) {
             energy = minOf(maxEnergy, energy + Cfg.ENERGY_REGEN * dt)
         }
 
-        val sp = speed * world.speedMul
-        xs[0] += cos(angle) * sp * dt
-        ys[0] += sin(angle) * sp * dt
+        val vel = speed * world.speedMul
+        xs[0] += cos(angle) * vel * dt
+        ys[0] += sin(angle) * vel * dt
 
         val want = targetSegs
         while (n < want) {

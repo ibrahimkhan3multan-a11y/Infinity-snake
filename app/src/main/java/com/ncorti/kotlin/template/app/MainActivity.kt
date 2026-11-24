@@ -23,6 +23,7 @@ import com.ncorti.kotlin.template.app.ui.HowToScreen
 import com.ncorti.kotlin.template.app.ui.InfinityTheme
 import com.ncorti.kotlin.template.app.ui.LocalAudio
 import com.ncorti.kotlin.template.app.ui.MenuScreen
+import com.ncorti.kotlin.template.app.ui.ModesScreen
 import com.ncorti.kotlin.template.app.ui.OnlineScreen
 import com.ncorti.kotlin.template.app.ui.QuestsScreen
 import com.ncorti.kotlin.template.app.ui.RebirthScreen
