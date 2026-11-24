@@ -315,10 +315,17 @@ class OnlineFlowTest {
     fun appHostsOnWifiWithoutAnyServerAndAGuestJoinsItsAddress() {
         assumeTrue("device has a Wi-Fi style address", com.ncorti.kotlin.template.app.net.LocalRelay.localAddress() != null)
         click("ONLINE")
-        waitFor("HOST ON WI-FI") // no server saved, so the Wi-Fi tab is shown
+        waitFor("HOST ON THIS PHONE") // no server saved, so the Wi-Fi tab is shown
         val myIp = com.ncorti.kotlin.template.app.net.LocalRelay.localAddress()!!
         assertTrue("host panel shows this phone's address ($myIp) before starting", device.wait(Until.hasObject(By.textContains(myIp)), 10_000))
         shot("24_wifi_tab")
+        // The mode chips made the panel taller than a landscape screen: scroll to the button.
+        repeat(6) {
+            if (!device.hasObject(By.text("HOST ON WI-FI"))) {
+                device.swipe(device.displayWidth / 4, device.displayHeight * 3 / 4, device.displayWidth / 4, device.displayHeight / 4, 20)
+                Thread.sleep(300)
+            }
+        }
         click("HOST ON WI-FI")
         waitFor("BOOST")
         val room = onApp { it.session!!.room!! }
