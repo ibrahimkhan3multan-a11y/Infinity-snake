@@ -115,7 +115,6 @@ fun MenuScreen(app: AppState) {
                         SideChip("ONLINE", Neon.Lime, Ico.CROWN) { app.open(Screen.ONLINE) }
                         SideChip("SHOP", Neon.Pink, Ico.BAG) { app.open(Screen.SHOP) }
                         SideChip("SKINS", Neon.Violet, Ico.SNAKE) { app.open(Screen.SKINS) }
-                        SideChip("MODES", Neon.Amber, Ico.TARGET) { app.open(Screen.MODES) }
                         SideChip("HELP", Neon.Cyan, null) { app.open(Screen.HOWTO) }
                         Spacer(Modifier.weight(1f))
                         ModeToggle(solo = s.soloMode) { s.updateSoloMode(it) }
@@ -428,6 +427,20 @@ private fun SnakeBar(app: AppState) {
                 Text("EDIT SNAKE", color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 14.sp)
                 Text(skin.name, color = Neon.Dim, fontSize = 11.sp)
             }
+        }
+        Row(
+            Modifier
+                .padding(end = 8.dp)
+                .height(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .border(2.dp, Neon.Amber.copy(alpha = 0.85f), RoundedCornerShape(12.dp))
+                .clickable { app.open(Screen.MODES) }
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Ico(Ico.TARGET, 18.dp, Neon.Amber)
+            Text("MODES", color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 13.sp, letterSpacing = 1.sp)
         }
     }
 }
