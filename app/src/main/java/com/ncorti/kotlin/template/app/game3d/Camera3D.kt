@@ -64,22 +64,38 @@ class Camera3D {
         val map = g.map
         val hc = g.headCell
         inTunnel = map.hasUpper(map.cx(hc), map.cz(hc), map.cl(hc))
-        val wantDist = if (inTunnel) 2.7f else 5.0f
-        val wantHeight = if (inTunnel) 0.95f else 3.1f
-        val kd = 1f - exp(-3.5f * dt)
-        dist += (wantDist - dist) * kd
-        height += (wantHeight - height) * kd
-
         val fx = cos(yaw)
         val fz = sin(yaw)
         val tx = target[0]
         val ty = target[1] + 0.35f
+
+        // Pick the most pleasant camera spot that sees the head without a wall or roof in between:
+        // normally behind and above; steeper and closer where space is tight; low inside tunnels.
+        val cands = if (inTunnel) TUNNEL_VIEWS else OPEN_VIEWS
+        var wantDist = cands[cands.size - 2]
+        var wantHeight = cands[cands.size - 1]
+        var i = 0
+        while (i < cands.size) {
+            val d = cands[i]
+            val hgt = cands[i + 1]
+            if (clearView(map, tx, ty, target[2], tx - fx * d, ty + hgt, target[2] - fz * d)) {
+                wantDist = d
+                wantHeight = hgt
+                break
+            }
+            i += 2
+        }
+        val kd = 1f - exp(-(if (wantDist < dist) 9f else 2.5f) * dt)
+        dist += (wantDist - dist) * kd
+        val kh = 1f - exp(-(if (wantHeight > height && wantDist < dist) 9f else 3f) * dt)
+        height += (wantHeight - height) * kh
+
         val tz = target[2]
         val dx = tx - fx * dist
         val dy = ty + height
         val dz = tz - fz * dist
 
-        // Keep the camera out of solid things: march from the snake toward the camera.
+        // Safety: march from the snake toward the camera and stop short of anything solid.
         var okT = 1f
         val steps = 14
         for (s in 1..steps) {
@@ -87,8 +103,8 @@ class Camera3D {
             val px = tx + (dx - tx) * t
             val py = ty + (dy - ty) * t
             val pz = tz + (dz - tz) * t
-            if (map.solidAt(px, py, pz) || map.solidAt(px, py - 0.18f, pz)) {
-                okT = ((s - 1) / steps.toFloat()).coerceAtLeast(0.18f)
+            if (map.solidAt(px, py, pz) || map.solidAt(px, py - 0.18f, pz) || map.solidAt(px, py + 0.16f, pz)) {
+                okT = ((s - 1) / steps.toFloat()).coerceAtLeast(0.04f)
                 break
             }
         }
@@ -124,5 +140,23 @@ class Camera3D {
         up[0] = ry * vz - rz * vy
         up[1] = rz * vx - rx * vz
         up[2] = rx * vy - ry * vx
+    }
+
+    private fun clearView(map: GameMap, ax: Float, ay: Float, az: Float, bx: Float, by: Float, bz: Float): Boolean {
+        val n = 14
+        for (s in 1..n) {
+            val t = s / n.toFloat()
+            val px = ax + (bx - ax) * t
+            val py = ay + (by - ay) * t
+            val pz = az + (bz - az) * t
+            if (map.solidAt(px, py, pz) || map.solidAt(px, py - 0.18f, pz) || map.solidAt(px, py + 0.16f, pz)) return false
+        }
+        return true
+    }
+
+    companion object {
+        // Pairs of (distance behind, height above), most preferred first.
+        private val OPEN_VIEWS = floatArrayOf(5.0f, 3.1f, 4.2f, 3.6f, 3.2f, 4.0f, 2.4f, 4.5f, 1.5f, 4.8f, 0.8f, 5.0f)
+        private val TUNNEL_VIEWS = floatArrayOf(2.7f, 0.95f, 2.4f, 0.7f, 2.2f, 0.55f, 2.0f, 0.8f, 2.0f, 0.4f, 1.8f, 0.3f, 1.4f, 0.7f, 1.4f, 0.3f, 1.2f, 0.2f, 0.9f, 0.6f, 0.9f, 0.2f, 0.7f, 0.15f, 0.5f, 0.5f)
     }
 }

@@ -269,9 +269,97 @@ class Game3D(val map: GameMap, val rnd: Random = Random(System.nanoTime())) {
             val c = tiles[rnd.nextInt(tiles.size)]
             if (occupied(c) || manhattan(c, cells[0]) < 5) continue
             if (openNeighbours(c) < 3) continue // never plug a corridor
+            // Never cut the map in two: every tile must stay reachable with the new crate in place.
+            val before = reachableCells(-1)
+            val crateWasReachable = reachableMark(c)
+            val after = reachableCells(c)
+            if (after < before - (if (crateWasReachable) 1 else 0)) continue
+            if (!trapFree(c)) continue // and never create a pocket the snake cannot turn around in
             crates.add(c)
             return
         }
+    }
+
+    private var markBuf = BooleanArray(0)
+
+    private fun reachableMark(c: Int): Boolean = c < markBuf.size && markBuf[c]
+
+    /** Number of tiles the head can still get to (ignoring the body), treating [extra] as a crate. */
+    private fun reachableCells(extra: Int): Int {
+        val total = map.cellCount * 4
+        val seen = BooleanArray(total)
+        if (markBuf.size != map.cellCount) markBuf = BooleanArray(map.cellCount)
+        java.util.Arrays.fill(markBuf, false)
+        val queue = IntArray(total)
+        var qh = 0
+        var qt = 0
+        val start = cells[0]
+        for (h in 0 until 4) { seen[start * 4 + h] = true; queue[qt++] = start * 4 + h }
+        markBuf[start] = true
+        var count = 1
+        while (qh < qt) {
+            val st = queue[qh++]
+            val c = st / 4
+            val hd = st % 4
+            for (d in 0 until 4) {
+                if (d == GameMap.opposite(hd)) continue
+                val nb = map.next(c, d)
+                if (nb < 0 || nb == extra || crates.contains(nb)) continue
+                val ns = nb * 4 + d
+                if (seen[ns]) continue
+                seen[ns] = true
+                queue[qt++] = ns
+                if (!markBuf[nb]) { markBuf[nb] = true; count++ }
+            }
+        }
+        return count
+    }
+
+    /** True when, with a crate on [extra], every state the head can reach can still keep moving. */
+    private fun trapFree(extra: Int): Boolean {
+        val total = map.cellCount * 4
+        val succ = IntArray(total * 3) { -1 }
+        val seen = BooleanArray(total)
+        val order = IntArray(total)
+        var qh = 0
+        var qt = 0
+        val start = cells[0]
+        for (h in 0 until 4) { seen[start * 4 + h] = true; order[qt++] = start * 4 + h }
+        while (qh < qt) {
+            val st = order[qh++]
+            val c = st / 4
+            val hd = st % 4
+            var k = 0
+            for (d in 0 until 4) {
+                if (d == GameMap.opposite(hd)) continue
+                val nb = map.next(c, d)
+                if (nb < 0 || nb == extra || crates.contains(nb)) continue
+                val ns = nb * 4 + d
+                succ[st * 3 + k++] = ns
+                if (!seen[ns]) { seen[ns] = true; order[qt++] = ns }
+            }
+        }
+        val alive = BooleanArray(total)
+        for (i in 0 until qt) alive[order[i]] = true
+        var changed = true
+        while (changed) {
+            changed = false
+            for (i in 0 until qt) {
+                val st = order[i]
+                if (!alive[st]) continue
+                var ok = false
+                for (k in 0 until 3) {
+                    val ns = succ[st * 3 + k]
+                    if (ns >= 0 && alive[ns]) { ok = true; break }
+                }
+                if (!ok) { alive[st] = false; changed = true }
+            }
+        }
+        for (i in 0 until qt) {
+            // The four start states differ only by heading; a pocket right at the head is the head's own business.
+            if (!alive[order[i]] && order[i] / 4 != start) return false
+        }
+        return true
     }
 
     private fun openNeighbours(c: Int): Int {
@@ -289,10 +377,12 @@ class Game3D(val map: GameMap, val rnd: Random = Random(System.nanoTime())) {
 
     private var distBuf = IntArray(0)
     private var firstBuf = IntArray(0)
+    private var freeAt = IntArray(0)
 
     /**
-     * Breadth-first search over (tile, heading) from the head to the food, avoiding the body and
-     * crates. Returns the heading to take now, or -1 when no route exists.
+     * Breadth-first search over (tile, heading) from the head to the food. A body segment only
+     * blocks a tile until the tail has passed it, so tight corridors can be followed. Returns the
+     * heading to take now, or -1 when no route exists.
      */
     fun routeHeading(): Int {
         if (foodCell < 0) return -1
@@ -302,9 +392,9 @@ class Game3D(val map: GameMap, val rnd: Random = Random(System.nanoTime())) {
             firstBuf = IntArray(total)
         }
         java.util.Arrays.fill(distBuf, -1)
-        val blocked = HashSet<Int>()
-        for (i in 0 until length - 1) blocked.add(cells[i])
-        blocked.addAll(crates)
+        if (freeAt.size != map.cellCount) freeAt = IntArray(map.cellCount)
+        java.util.Arrays.fill(freeAt, 0)
+        for (i in 0 until length) freeAt[cells[i]] = max(freeAt[cells[i]], length - i)
         val queue = IntArray(total)
         var qh = 0
         var qt = 0
@@ -314,28 +404,61 @@ class Game3D(val map: GameMap, val rnd: Random = Random(System.nanoTime())) {
         firstBuf[s0] = -1
         queue[qt++] = s0
         while (qh < qt) {
-            val s = queue[qh++]
-            val c = s / 4
-            val hd = s % 4
+            val st = queue[qh++]
+            val c = st / 4
+            val hd = st % 4
             for (d in 0 until 4) {
                 if (d == GameMap.opposite(hd)) continue
                 val nb = map.next(c, d)
-                if (nb < 0 || nb in blocked) continue
+                if (nb < 0 || crates.contains(nb)) continue
+                val dist = distBuf[st] + 1
+                if (dist < freeAt[nb]) continue
                 val ns = nb * 4 + d
                 if (distBuf[ns] >= 0) continue
-                distBuf[ns] = distBuf[s] + 1
-                firstBuf[ns] = if (firstBuf[s] == -1) d else firstBuf[s]
+                distBuf[ns] = dist
+                firstBuf[ns] = if (firstBuf[st] == -1) d else firstBuf[st]
                 if (nb == foodCell) return firstBuf[ns]
                 queue[qt++] = ns
             }
         }
-        // No route: take any move that does not kill us right now.
+        // No route: take the safe move that leaves the most room to wander.
+        var best = -1
+        var bestRoom = -1
         for (d in 0 until 4) {
             if (d == GameMap.opposite(h0)) continue
             val nb = map.next(cells[0], d)
-            if (nb >= 0 && nb !in blocked) return d
+            if (nb < 0 || crates.contains(nb) || freeAt[nb] > 1) continue
+            val room = roomFrom(nb, d)
+            if (room > bestRoom) { bestRoom = room; best = d }
         }
-        return -1
+        return best
+    }
+
+    private fun roomFrom(cell: Int, heading: Int): Int {
+        val total = map.cellCount * 4
+        val seen = BooleanArray(total)
+        val queue = IntArray(600)
+        var qh = 0
+        var qt = 0
+        seen[cell * 4 + heading] = true
+        queue[qt++] = cell * 4 + heading
+        var count = 0
+        while (qh < qt && qt < queue.size - 4) {
+            val st = queue[qh++]
+            count++
+            val c = st / 4
+            val hd = st % 4
+            for (d in 0 until 4) {
+                if (d == GameMap.opposite(hd)) continue
+                val nb = map.next(c, d)
+                if (nb < 0 || crates.contains(nb) || freeAt[nb] > 0 && nb != cell) continue
+                val ns = nb * 4 + d
+                if (seen[ns]) continue
+                seen[ns] = true
+                queue[qt++] = ns
+            }
+        }
+        return count
     }
 
     /** Lets the autopilot choose the next heading. */
