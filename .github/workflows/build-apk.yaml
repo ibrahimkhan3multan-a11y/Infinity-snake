@@ -102,7 +102,7 @@ jobs:
           script: |
             mkdir -p app/build/outputs/logcat
             (adb logcat -v time > app/build/outputs/logcat/logcat.txt &)
-            ./gradlew :app:connectedDebugAndroidTest --stacktrace
+            ./gradlew :app:connectedDebugAndroidTest --stacktrace ; rc=0 ; adb logcat -d -s WATCHDOG:E | cut -c1-6000 | head -20 ; exit 
 
       - name: Upload screenshots and reports
         if: always()

@@ -52,10 +52,22 @@ class GameFlowTest {
         context.getSharedPreferences("infinity_snake", Context.MODE_PRIVATE).edit().clear().commit()
         scenario = ActivityScenario.launch(MainActivity::class.java)
         waitFor("PLAY")
+        // Diagnostic: if a test is still running after 60 s, log where the main thread is stuck.
+        Thread {
+            try {
+                Thread.sleep(60_000)
+                val main = android.os.Looper.getMainLooper().thread
+                android.util.Log.e("WATCHDOG", "main thread stack: " + main.stackTrace.joinToString(" | ") { it.toString() })
+            } catch (_: InterruptedException) {
+            }
+        }.also { it.isDaemon = true; watchdog = it }.start()
     }
+
+    private var watchdog: Thread? = null
 
     @After
     fun tearDown() {
+        watchdog?.interrupt()
         runCatching { scenario.close() }
         device.setOrientationNatural()
         device.unfreezeRotation()
