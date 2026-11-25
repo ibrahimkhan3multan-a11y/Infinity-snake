@@ -82,6 +82,26 @@ class Game3D(val map: GameMap, val rnd: Random = Random(System.nanoTime())) {
         spawnFood()
     }
 
+    /** Puts the head on [cell] facing [h] with a fresh three-segment tail (scripted scenes and tests). */
+    fun placeHead(cell: Int, h: Int) {
+        heading = h
+        pending = -1
+        progress = 0f
+        growth = 0
+        alive = true
+        death = Death.NONE
+        cells[0] = cell
+        n = 1
+        var cur = cell
+        repeat(3) {
+            val nb = map.next(cur, GameMap.opposite(h))
+            cells[n++] = if (nb >= 0) nb else cur
+            if (nb >= 0) cur = nb
+        }
+        length = n - 1
+        levelsVisited = levelsVisited or (1 shl map.cl(cell))
+    }
+
     // ------------------------------------------------------------ access
 
     val headCell: Int get() = cells[0]

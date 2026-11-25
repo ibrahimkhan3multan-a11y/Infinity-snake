@@ -19,6 +19,7 @@ class Camera3D {
     private var height = 3.2f
     private var allowed = 1f
     private var inited = false
+    private var firstFrame = true
 
     // Orthonormal basis for projection, updated by [update].
     val fwd = FloatArray(3)
@@ -41,6 +42,7 @@ class Camera3D {
 
     fun reset(g: Game3D) {
         inited = false
+        firstFrame = true
         update(g, 0.016f)
     }
 
@@ -91,7 +93,12 @@ class Camera3D {
             }
         }
         // Pull in quickly, relax out slowly, so it never snaps.
-        allowed += (okT - allowed) * (if (okT < allowed) 1f - exp(-14f * dt) else 1f - exp(-2.2f * dt))
+        if (firstFrame) {
+            allowed = okT
+            firstFrame = false
+        } else {
+            allowed += (okT - allowed) * (if (okT < allowed) 1f - exp(-24f * dt) else 1f - exp(-2.2f * dt))
+        }
         pos[0] = tx + (dx - tx) * allowed
         pos[1] = ty + (dy - ty) * allowed
         pos[2] = tz + (dz - tz) * allowed
