@@ -33,11 +33,11 @@ class Camera3D {
     private val head = FloatArray(3)
 
     private fun angleDiff(a: Float, b: Float): Float {
-        var d = b - a
         val tp = (2 * PI).toFloat()
-        while (d > PI) d -= tp
-        while (d < -PI) d += tp
-        return d
+        var d = (b - a) % tp
+        if (d > PI) d -= tp
+        if (d < -PI) d += tp
+        return if (d.isNaN()) 0f else d
     }
 
     fun reset(g: Game3D) {

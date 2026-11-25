@@ -92,13 +92,17 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Instrumented tests on emulator
+        timeout-minutes: 25
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 30
           arch: x86_64
           profile: pixel_5
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace
+          script: |
+            mkdir -p app/build/outputs/logcat
+            (adb logcat -v time > app/build/outputs/logcat/logcat.txt &)
+            ./gradlew :app:connectedDebugAndroidTest --stacktrace
 
       - name: Upload screenshots and reports
         if: always()
@@ -109,6 +113,7 @@ jobs:
             app/build/outputs/connected_android_test_additional_output/**
             app/build/reports/androidTests/**
             app/build/outputs/androidTest-results/**
+            app/build/outputs/logcat/**
           if-no-files-found: warn
 
       - name: Publish screenshots to the ci-screenshots branch
