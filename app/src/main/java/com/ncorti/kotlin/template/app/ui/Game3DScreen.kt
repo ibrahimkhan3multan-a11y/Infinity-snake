@@ -270,13 +270,34 @@ fun Game3DScreen(app: AppState, session: Session3D) {
     }
 }
 
+private var sceneBmp: android.graphics.Bitmap? = null
+private var sceneCanvas: android.graphics.Canvas? = null
+private val blitPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+
+/**
+ * The scene is drawn by the CPU into a reduced-size bitmap and blitted. Hundreds of gradient/stroked paths per
+ * frame are far too heavy for the GPU display-list path (it stalled the main thread on the test emulator).
+ */
 private fun drawIntoNative(scope: DrawScope, session: Session3D, quality: Int) {
-    scope.drawContext.canvas.nativeCanvas.let { c ->
-        session.renderer.draw(
-            c, scope.size.width.toInt(), scope.size.height.toInt(), session.game, session.camera, quality,
-            session.skin.head, session.skin.tail, session.skin.rainbow,
-        )
+    val w = scope.size.width.toInt().coerceAtLeast(2)
+    val h = scope.size.height.toInt().coerceAtLeast(2)
+    val maxW = if (quality == 0) 480f else if (quality == 1) 640f else 800f
+    val k = minOf(1f, maxW / w)
+    val bw = (w * k).toInt().coerceAtLeast(2)
+    val bh = (h * k).toInt().coerceAtLeast(2)
+    var bmp = sceneBmp
+    if (bmp == null || bmp.width != bw || bmp.height != bh) {
+        bmp = android.graphics.Bitmap.createBitmap(bw, bh, android.graphics.Bitmap.Config.ARGB_8888)
+        sceneBmp = bmp
+        sceneCanvas = android.graphics.Canvas(bmp)
     }
+    val bc = sceneCanvas!!
+    session.renderer.draw(
+        bc, bw, bh, session.game, session.camera, quality,
+        session.skin.head, session.skin.tail, session.skin.rainbow,
+    )
+    val c = scope.drawContext.canvas.nativeCanvas
+    c.drawBitmap(bmp, null, android.graphics.Rect(0, 0, w, h), blitPaint)
 }
 
 @Composable
