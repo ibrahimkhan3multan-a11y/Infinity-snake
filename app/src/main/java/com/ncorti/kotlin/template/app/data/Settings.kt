@@ -58,6 +58,26 @@ class Settings(context: Context) {
     fun updateGameMode(v: Int) { gameMode = v.coerceIn(0, 3); sp.edit().putInt("game_mode", gameMode).apply() }
     fun updateView3d(v: Boolean) { view3d = v; sp.edit().putBoolean("view3d", v).apply() }
 
+    /** True when PLAY should start the real 3D game. */
+    var play3d by mutableStateOf(sp.getBoolean("play3d", false))
+        private set
+    var map3d by mutableIntStateOf(sp.getInt("map3d", 0).coerceIn(0, 4))
+        private set
+    fun updatePlay3d(v: Boolean) { play3d = v; sp.edit().putBoolean("play3d", v).apply() }
+    fun updateMap3d(v: Int) { map3d = v.coerceIn(0, 4); sp.edit().putInt("map3d", map3d).apply() }
+    fun best3d(id: String): Int = sp.getInt("best3d_$id", 0)
+
+    /** Saves a finished 3D run. Returns (new best?, coins earned). */
+    fun record3d(id: String, score: Int): Pair<Boolean, Int> {
+        val isBest = score > best3d(id)
+        val earned = ((score / 8) * Rebirth.coinMultiplier(rebirths)).toInt()
+        coins += earned
+        val e = sp.edit().putInt("coins", coins)
+        if (isBest) e.putInt("best3d_$id", score)
+        e.apply()
+        return isBest to earned
+    }
+
     var soloMode by mutableStateOf(sp.getBoolean("solo_mode", false))
         private set
     var challengeDone by mutableStateOf(parseSet(sp.getString("ch_done", ""), addDefaults = false))

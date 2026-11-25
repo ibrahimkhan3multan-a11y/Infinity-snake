@@ -18,7 +18,7 @@ import com.ncorti.kotlin.template.app.net.Protocol
 import com.ncorti.kotlin.template.app.net.RelayClient
 import org.json.JSONObject
 
-enum class Screen { MENU, PLAYING, SKINS, SHOP, SETTINGS, HOWTO, ONLINE, QUESTS, CODES, TESTER, REBIRTH, BACKUP, MODES }
+enum class Screen { MENU, PLAYING, SKINS, SHOP, SETTINGS, HOWTO, ONLINE, QUESTS, CODES, TESTER, REBIRTH, BACKUP, MODES, PLAY3D }
 
 /**
  * Process-wide UI state. The activity handles configuration changes itself (see the manifest), so
@@ -32,6 +32,9 @@ class AppState(
     var screen by mutableStateOf(Screen.MENU)
         private set
     var session by mutableStateOf<GameSession?>(null)
+
+    /** The running 3D game, if any. */
+    var session3d by mutableStateOf<Session3D?>(null)
         private set
 
     init {
@@ -211,7 +214,24 @@ class AppState(
         screen = Screen.PLAYING
     }
 
+    /** Starts the real 3D game on map [index]. */
+    fun start3D(index: Int) {
+        session?.close()
+        session = null
+        stopLan()
+        settings.updateMap3d(index)
+        audio.musicMode = MusicMode.GAME
+        audio.play(Sfx.START)
+        session3d = Session3D(this, index)
+        screen = Screen.PLAY3D
+    }
+
     fun startGame(solo: Boolean) {
+        if (settings.play3d) {
+            start3D(settings.map3d)
+            return
+        }
+        session3d = null
         session?.close()
         stopLan()
         settings.updateSoloMode(solo)
@@ -222,6 +242,8 @@ class AppState(
     }
 
     fun toMenu() {
+        session3d?.close()
+        session3d = null
         session?.close()
         stopLan()
         audio.musicMode = MusicMode.MENU
@@ -256,6 +278,7 @@ class AppState(
     fun onBackground() {
         audio.foreground = false
         session?.let { if (!it.over && !it.isOnline) it.paused = true }
+        session3d?.let { if (!it.over) it.paused = true }
     }
 
     fun onForeground() {

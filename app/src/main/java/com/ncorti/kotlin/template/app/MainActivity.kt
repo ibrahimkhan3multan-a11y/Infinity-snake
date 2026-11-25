@@ -19,6 +19,7 @@ import com.ncorti.kotlin.template.app.audio.Haptics
 import com.ncorti.kotlin.template.app.data.Settings
 import com.ncorti.kotlin.template.app.ui.CodesScreen
 import com.ncorti.kotlin.template.app.ui.GameScreen
+import com.ncorti.kotlin.template.app.ui.Game3DScreen
 import com.ncorti.kotlin.template.app.ui.HowToScreen
 import com.ncorti.kotlin.template.app.ui.InfinityTheme
 import com.ncorti.kotlin.template.app.ui.LocalAudio
@@ -106,6 +107,7 @@ private fun Root(app: AppState) {
                 Screen.REBIRTH -> RebirthScreen(app)
                 Screen.BACKUP -> BackupScreen(app)
                 Screen.MODES -> ModesScreen(app)
+                Screen.PLAY3D -> app.session3d?.let { s3 -> key(s3) { Game3DScreen(app, s3) } }
             }
         }
         ModMenu(app)
