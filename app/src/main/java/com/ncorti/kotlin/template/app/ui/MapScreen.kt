@@ -121,7 +121,7 @@ fun MapOverlay(session: GameSession, onClose: () -> Unit) {
                             detectTapGestures { pos ->
                                 val c = Offset(size.width / 2f, size.height / 2f)
                                 val rad = size.width / 2f - 6.dp.toPx()
-                                val k = rad / Cfg.ARENA_RADIUS
+                                val k = rad / session.world.arena
                                 // A tap near a player picks that player; anywhere else picks the area.
                                 var best: com.ncorti.kotlin.template.app.game.Snake? = null
                                 var bestD = 26.dp.toPx()
@@ -139,7 +139,7 @@ fun MapOverlay(session: GameSession, onClose: () -> Unit) {
                                 } else {
                                     val wx = (pos.x - c.x) / k
                                     val wy = (pos.y - c.y) / k
-                                    if (hypot(wx, wy) <= Cfg.ARENA_RADIUS) pickArea(wx, wy, "that spot")
+                                    if (hypot(wx, wy) <= session.world.arena) pickArea(wx, wy, "that spot")
                                 }
                             }
                         },
@@ -148,7 +148,7 @@ fun MapOverlay(session: GameSession, onClose: () -> Unit) {
                     val tick = session.frame
                     val c = Offset(size.width / 2f, size.height / 2f)
                     val rad = size.width / 2f - 6.dp.toPx()
-                    val k = rad / Cfg.ARENA_RADIUS
+                    val k = rad / session.world.arena
                     drawCircle(Color(0xFF110B22), rad, c)
                     for (f in listOf(1f / 3f, 2f / 3f)) {
                         drawCircle(Color(0x33FFFFFF), rad * f, c, style = Stroke(1.dp.toPx()))
@@ -238,7 +238,7 @@ fun MapOverlay(session: GameSession, onClose: () -> Unit) {
                     NeonButton("STOP ROUTE", { session.cancelRoute() }, Modifier.fillMaxWidth().height(40.dp), primary = false, accent = Neon.Pink)
                 }
                 Text("QUICK AREAS", color = Neon.Dim, fontSize = 10.sp, letterSpacing = 1.sp)
-                val far = Cfg.ARENA_RADIUS * 0.6f
+                val far = session.world.arena * 0.6f
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     AreaChip("CENTER") { pickArea(0f, 0f, "the center") }
                     AreaChip("NORTH") { pickArea(0f, -far, "the north") }

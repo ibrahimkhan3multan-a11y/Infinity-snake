@@ -545,8 +545,8 @@ private fun Minimap(session: GameSession, onOpen: () -> Unit) {
         val tick = session.frame
         val c = Offset(size.width / 2f, size.height / 2f)
         val rad = size.width / 2f - 3.dp.toPx()
-        val k = rad / Cfg.ARENA_RADIUS
         val world = session.world
+        val k = rad / world.arena
         drawCircle(Neon.Pink.copy(alpha = 0.8f), world.radius * k, c, style = Stroke(2.dp.toPx()))
         for (bi in 0 until world.bombCount) {
             drawCircle(Color(0xFFFF4545), 2.6.dp.toPx(), Offset(c.x + world.bx[bi] * k, c.y + world.by[bi] * k))

@@ -19,8 +19,8 @@ import org.junit.Test
 
 /** Host and guest wired together in memory (no sockets), exactly as the relay would connect them. */
 class NetTest {
-    private class Room(bots: Int = 2, walls: Boolean = false) {
-        val hostWorld = World(Random(3), botCount = bots, deadlyWalls = walls, playerSkin = Skins.all[0])
+    private class Room(bots: Int = 2, walls: Boolean = false, arena: Float = Cfg.ARENA_RADIUS) {
+        val hostWorld = World(Random(3), botCount = bots, deadlyWalls = walls, playerSkin = Skins.all[0], arenaRadius = arena)
         val guestWorld = World(Random(4), botCount = 0, deadlyWalls = false, playerSkin = Skins.all[1], ambientFood = 0)
         lateinit var guest: GuestLogic
         val killed = ArrayList<String>()
@@ -91,6 +91,51 @@ class NetTest {
         assertEquals(host.n, me.n)
         assertTrue("food was mirrored", r.guestWorld.aliveFood > 0)
         assertTrue("leaderboard mirrored", r.guest.board.isNotEmpty())
+    }
+
+    @Test
+    fun guestMapKnowsEveryPlayerEvenFarAwayWithNames() {
+        val r = Room(bots = 14)
+        r.run(3f)
+        val hostOthers = r.hostWorld.snakes.filter { it.alive && !it.remote && !it.isPlayer }
+        val guestOthers = r.guestWorld.snakes.filter { it.alive && !it.isPlayer }
+        // Everyone except the guest itself (host's own snake + bots) is known on the guest.
+        assertEquals(hostOthers.size + 1, guestOthers.size)
+        val names = guestOthers.map { it.name }.toSet()
+        assertFalse("names arrived: $names", names.contains("Player"))
+        for (b in hostOthers) {
+            val g = guestOthers.firstOrNull { it.name == b.name }
+            assertNotNull("guest knows ${b.name}", g)
+            assertTrue("position close", hypot(g!!.xs[0] - b.xs[0], g.ys[0] - b.ys[0]) < 150f)
+        }
+    }
+
+    @Test
+    fun hostMapSizeReachesTheGuest() {
+        val r = Room(bots = 4, arena = 2600f)
+        r.run(1f)
+        assertEquals(2600f, r.guestWorld.arena, 1f)
+        assertEquals(2600f, r.guestWorld.radius, 1f)
+        for (s in r.hostWorld.snakes) assertTrue("inside the small arena", hypot(s.xs[0], s.ys[0]) < 2600f)
+    }
+
+    @Test
+    fun guestMotionIsSmoothBetweenSnapshots() {
+        val r = Room(bots = 0)
+        r.run(2f)
+        // Per-frame movement of the guest's own head should stay close to the real speed (no stop-and-go).
+        var prev = r.guestWorld.player.xs[0] to r.guestWorld.player.ys[0]
+        var maxStep = 0f
+        var minStep = 1e9f
+        val dt = 1f / 60f
+        repeat(120) {
+            r.run(dt)
+            val p = r.guestWorld.player
+            val st = hypot(p.xs[0] - prev.first, p.ys[0] - prev.second)
+            maxStep = maxOf(maxStep, st); minStep = minOf(minStep, st)
+            prev = p.xs[0] to p.ys[0]
+        }
+        assertTrue("min step $minStep max $maxStep", minStep > 0.5f && maxStep < Cfg.BASE_SPEED * 2.2f * dt)
     }
 
     @Test

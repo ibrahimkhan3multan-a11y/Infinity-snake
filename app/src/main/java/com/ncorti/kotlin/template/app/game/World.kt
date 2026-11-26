@@ -25,6 +25,7 @@ class World(
     var listener: WorldListener? = null,
     val ambientFood: Int = Cfg.AMBIENT_FOOD,
     playerName: String = "You",
+    arenaRadius: Float = Cfg.ARENA_RADIUS,
 ) {
     val snakes = ArrayList<Snake>(botCount + 1)
     val player = Snake(0, true, playerName)
@@ -63,7 +64,15 @@ class World(
         }
 
     /** Current wall radius. Equals [Cfg.ARENA_RADIUS] except in Shrinking Arena. */
-    var radius = Cfg.ARENA_RADIUS
+    var radius = arenaRadius
+
+    /** Full (unshrunk) wall radius for this match; set before play starts or synced from the host. */
+    var arena = arenaRadius
+        set(v) {
+            val was = field
+            field = v
+            if (mode != GameMode.SHRINK || radius >= was - 0.5f) radius = v
+        }
 
     /** Everybody's speed multiplier (Food Frenzy). */
     var speedMul = 1f
@@ -303,7 +312,8 @@ class World(
     private fun stepMode(dt: Float, n: Int) {
         if (mode == GameMode.SHRINK) {
             val k = (time / Cfg.SHRINK_SECONDS).coerceIn(0f, 1f)
-            radius = Cfg.ARENA_RADIUS + (Cfg.SHRINK_MIN - Cfg.ARENA_RADIUS) * k
+            val small = minOf(Cfg.SHRINK_MIN, arena * 0.45f)
+            radius = arena + (small - arena) * k
         }
         if (mode != GameMode.BOMBS) return
 
@@ -432,7 +442,7 @@ class World(
             val lim = radius - s.radius
             val d2 = hx * hx + hy * hy
             if (d2 > lim * lim) {
-                val ring = mode == GameMode.SHRINK && radius < Cfg.ARENA_RADIUS - 1f
+                val ring = mode == GameMode.SHRINK && radius < arena - 1f
                 if (ring && s.grace <= 0f) {
                     killer[i] = WALL
                 } else if (deadlyWalls && s.grace <= 0f && s.shield <= 0f) {
@@ -628,8 +638,8 @@ class World(
 
     companion object {
         const val CELL = 160f
-        val GRID_N = ((Cfg.ARENA_RADIUS * 2f + 400f) / CELL).toInt() + 1
-        private val GRID_OFF = Cfg.ARENA_RADIUS + 200f
+        val GRID_N = ((Cfg.ARENA_MAX * 2f + 400f) / CELL).toInt() + 1
+        private val GRID_OFF = Cfg.ARENA_MAX + 200f
 
         /** Grid column or row for a world coordinate, clamped to the grid. */
         fun cellCoord(v: Float): Int = ((v + GRID_OFF) / CELL).toInt().coerceIn(0, GRID_N - 1)

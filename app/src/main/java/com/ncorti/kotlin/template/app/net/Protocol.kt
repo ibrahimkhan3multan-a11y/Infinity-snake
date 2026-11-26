@@ -8,13 +8,13 @@ import org.json.JSONObject
 
 /** Wire format helpers shared by host and guest. Payloads travel inside relay `{t:"m"}` frames. */
 object Protocol {
-    const val SNAPSHOT_HZ = 15f
-    const val INPUT_HZ = 20f
+    const val SNAPSHOT_HZ = 20f
+    const val INPUT_HZ = 30f
     /** Snakes and food farther than this from the guest's head are not sent. */
     const val SNAKE_RANGE = 1500f
     const val FOOD_RANGE = 950f
     /** Food is resent every Nth snapshot. */
-    const val FOOD_EVERY = 3
+    const val FOOD_EVERY = 5
     const val MAX_SAMPLES = 48
 
     const val F_ALIVE = 1

@@ -8,6 +8,10 @@ const val TWO_PI = 6.2831855f
 /** Tunable constants for the arena simulation. World units are abstract "pixels". */
 object Cfg {
     const val ARENA_RADIUS = 4200f
+    /** Largest arena the world grid is sized for. */
+    const val ARENA_MAX = 6000f
+    val ARENA_SIZES = floatArrayOf(2600f, 4200f, 6000f)
+    val ARENA_NAMES = arrayOf("Small", "Normal", "Large")
     const val STEP = 1f / 60f
     const val BASE_SPEED = 170f
     const val BOOST_SPEED = 300f

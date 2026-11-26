@@ -102,10 +102,14 @@ class GameSession(
         listener = null,
         ambientFood = when {
             isGuest -> 0
-            settings.gameMode == GameMode.FRENZY -> 3600
-            else -> Cfg.AMBIENT_FOOD
+            else -> {
+                val a = Cfg.ARENA_SIZES[settings.arenaSize]
+                val base = if (settings.gameMode == GameMode.FRENZY) 3600f else Cfg.AMBIENT_FOOD.toFloat()
+                (base * (a / Cfg.ARENA_RADIUS) * (a / Cfg.ARENA_RADIUS)).toInt().coerceIn(900, Cfg.FOOD_CAP - 200)
+            }
         },
         playerName = settings.playerName,
+        arenaRadius = if (isGuest) Cfg.ARENA_RADIUS else Cfg.ARENA_SIZES[settings.arenaSize],
     )
     private val host: HostLogic? = if (room != null && room.isHost) HostLogic(world, room.client) else null
     private val guest: GuestLogic? = if (isGuest) {
@@ -287,7 +291,10 @@ class GameSession(
 
     init {
         world.listener = this
-        if (!isGuest) world.mode = settings.gameMode
+        if (!isGuest) {
+            world.mode = settings.gameMode
+            world.arena = Cfg.ARENA_SIZES[settings.arenaSize]
+        }
         world.onBomb = { x, y -> bombBlast(x, y) }
         guest?.sendHello()
         val me = world.player

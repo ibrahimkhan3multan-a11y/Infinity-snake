@@ -30,6 +30,13 @@ class GuestLogic(
         val ty = FloatArray(Cfg.MAX_SEGS)
         var tn = 0
         var fresh = true
+        // Dead reckoning between snapshots.
+        var vx = 0f
+        var vy = 0f
+        var age = 0f
+        var prevX = 0f
+        var prevY = 0f
+        var prevT = 0L
     }
 
     private val ghosts = HashMap<Int, Ghost>()
@@ -145,6 +152,7 @@ class GuestLogic(
         }
 
         world.mode = m.optInt("md", 0)
+        m.optDouble("ar", Double.NaN).let { if (!it.isNaN() && it > 500.0) world.arena = it.toFloat() }
         world.radius = m.optDouble("rd", Cfg.ARENA_RADIUS.toDouble()).toFloat()
         world.setBombs(m.optJSONArray("bm"))
         val live = HashSet<Int>()
@@ -186,6 +194,19 @@ class GuestLogic(
                 val pts = e.optJSONArray(13)
                 if (isAlive && pts != null && n > 0) {
                     Protocol.unpackBody(n, pts, g.tx, g.ty)
+                    val now = System.nanoTime()
+                    val dtS = (now - g.prevT) / 1e9f
+                    if (g.fresh || g.tn == 0 || dtS < 0.01f || dtS > 0.5f) {
+                        g.vx = 0f; g.vy = 0f
+                    } else {
+                        var nvx = (g.tx[0] - g.prevX) / dtS
+                        var nvy = (g.ty[0] - g.prevY) / dtS
+                        val sp = kotlin.math.hypot(nvx, nvy)
+                        if (sp > 380f) { nvx *= 380f / sp; nvy *= 380f / sp }
+                        g.vx = g.vx * 0.4f + nvx * 0.6f
+                        g.vy = g.vy * 0.4f + nvy * 0.6f
+                    }
+                    g.prevX = g.tx[0]; g.prevY = g.ty[0]; g.prevT = now; g.age = 0f
                     if (g.fresh || g.tn == 0 || far(s, g)) {
                         System.arraycopy(g.tx, 0, s.xs, 0, n)
                         System.arraycopy(g.ty, 0, s.ys, 0, n)
@@ -209,12 +230,37 @@ class GuestLogic(
                 }
             }
         }
-        // Snakes that went out of range or died are simply not drawn.
+        // Snakes out of range are known only by their position (for the maps); dead ones are not drawn.
+        val far = HashMap<Int, Pair<Float, Float>>()
+        m.optJSONArray("mp")?.let { mp ->
+            var i = 0
+            while (i + 2 < mp.length()) {
+                far[mp.optInt(i)] = mp.optDouble(i + 1).toFloat() to mp.optDouble(i + 2).toFloat()
+                i += 3
+            }
+        }
         for ((id, g) in ghosts) {
             if (id != meId && id !in seen) {
-                g.snake.alive = false
+                val p = far[id]
+                if (p != null) {
+                    g.snake.alive = true
+                    g.snake.n = 1
+                    g.snake.xs[0] = p.first
+                    g.snake.ys[0] = p.second
+                } else {
+                    g.snake.alive = false
+                }
                 g.fresh = true
+                g.tn = 0
             }
+        }
+        for ((id, p) in far) {
+            if (id == meId || id in ghosts) continue
+            val gs = ghostFor(id).snake
+            gs.alive = true
+            gs.n = 1
+            gs.xs[0] = p.first
+            gs.ys[0] = p.second
         }
 
         m.optJSONArray("fd")?.let { fd ->
@@ -240,10 +286,14 @@ class GuestLogic(
         for (g in ghosts.values) {
             val s = g.snake
             if (!s.alive || g.tn == 0) continue
+            g.age += dt
+            val lead = minOf(g.age, 0.22f)
+            val ox = g.vx * lead
+            val oy = g.vy * lead
             val n = minOf(s.n, g.tn)
             for (i in 0 until n) {
-                s.xs[i] += (g.tx[i] - s.xs[i]) * k
-                s.ys[i] += (g.ty[i] - s.ys[i]) * k
+                s.xs[i] += (g.tx[i] + ox - s.xs[i]) * k
+                s.ys[i] += (g.ty[i] + oy - s.ys[i]) * k
             }
         }
         val grew = me.mass > lastMass + 0.01f && me.alive

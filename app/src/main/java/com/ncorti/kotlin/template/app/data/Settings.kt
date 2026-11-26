@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.ncorti.kotlin.template.app.game.Cfg
 import com.ncorti.kotlin.template.app.game.Challenge
 import com.ncorti.kotlin.template.app.game.Challenges
 import com.ncorti.kotlin.template.app.game.Codes
@@ -55,6 +56,8 @@ class Settings(context: Context) {
     /** Tilted 3D camera instead of the flat top-down view. */
     var view3d by mutableStateOf(sp.getBoolean("view3d", false))
         private set
+    var arenaSize by mutableStateOf(sp.getInt("arena_size", 1).coerceIn(0, Cfg.ARENA_SIZES.size - 1))
+    fun updateArenaSize(v: Int) { arenaSize = v.coerceIn(0, Cfg.ARENA_SIZES.size - 1); sp.edit().putInt("arena_size", arenaSize).apply() }
     fun updateGameMode(v: Int) { gameMode = v.coerceIn(0, 3); sp.edit().putInt("game_mode", gameMode).apply() }
     fun updateView3d(v: Boolean) { view3d = v; sp.edit().putBoolean("view3d", v).apply() }
 

@@ -111,6 +111,8 @@ fun OnlineScreen(app: AppState) {
                 }
                 Text("Game mode (everyone joining plays it):", color = Neon.Dim, fontSize = 12.sp)
                 ModeChips(app)
+                Text("Map size (everyone joining plays it):", color = Neon.Dim, fontSize = 12.sp)
+                SizeChips(app)
                 NeonButton(
                     "HOST ON WI-FI",
                     { app.hostOnWifi(if (withBots) Cfg.ONLINE_BOTS else 0) },

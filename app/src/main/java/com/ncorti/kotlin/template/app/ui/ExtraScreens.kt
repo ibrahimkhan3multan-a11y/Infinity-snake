@@ -1,6 +1,7 @@
 package com.ncorti.kotlin.template.app.ui
 
 import androidx.compose.foundation.background
+import com.ncorti.kotlin.template.app.game.Cfg
 import com.ncorti.kotlin.template.app.game.GameMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.clickable
@@ -462,6 +463,21 @@ fun ModeChips(app: AppState) {
     }
 }
 
+/** Map size picker (Small / Normal / Large). The host's choice is sent to guests. */
+@Composable
+fun SizeChips(app: AppState) {
+    val s = app.settings
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        for (i in Cfg.ARENA_SIZES.indices) {
+            androidx.compose.material3.FilterChip(
+                selected = s.arenaSize == i,
+                onClick = { s.updateArenaSize(i) },
+                label = { Text(Cfg.ARENA_NAMES[i], fontSize = 11.sp) },
+            )
+        }
+    }
+}
+
 @Composable
 fun ModesScreen(app: AppState) {
     val s = app.settings
@@ -492,6 +508,8 @@ fun ModesScreen(app: AppState) {
                 "Pick how the next match plays. Hosting on Wi-Fi? Everyone who joins plays the mode you pick.",
                 color = Neon.Dim, fontSize = 13.sp,
             )
+            Text("MAP SIZE", color = Neon.Dim, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            SizeChips(app)
             for (m in 0 until GameMode.COUNT) {
                 val on = s.gameMode == m
                 XPanel(

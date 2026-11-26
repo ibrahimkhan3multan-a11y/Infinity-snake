@@ -188,7 +188,14 @@ class HostLogic(private val world: World, private val link: NetLink) {
             .put("rk", if (me.alive) world.rankOf(me) else me.lastRank).put("al", world.aliveCount())
             .put("en", Math.round(me.energy * 10f) / 10.0).put("mx", me.maxEnergy.toDouble())
             .put("pw", pw).put("bd", bd).put("sn", sn)
-            .put("md", world.mode).put("rd", Math.round(world.radius))
+            .put("md", world.mode).put("rd", Math.round(world.radius)).put("ar", Math.round(world.arena))
+        // Where everybody is (even far away), so guests' maps show every player.
+        val mp = JSONArray()
+        for (s in world.snakes) {
+            if (s.gone || !s.alive || s === me) continue
+            mp.put(s.id).put(Math.round(s.xs[0])).put(Math.round(s.ys[0]))
+        }
+        m.put("mp", mp)
         if (world.bombCount > 0) {
             val bm = JSONArray()
             for (i in 0 until world.bombCount) {
