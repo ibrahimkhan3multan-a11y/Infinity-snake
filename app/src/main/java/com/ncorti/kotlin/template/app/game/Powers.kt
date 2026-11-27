@@ -75,7 +75,29 @@ object Powers {
         75, 0.6f, 1.5f, 45f, 20f,
     )
 
-    val all: List<Power> = listOf(SHIELD, MAGNET, OVERDRIVE, FREEZE, RECHARGE, FEAST, DASH, VACUUM)
+    val GHOST = Power(
+        "ghost", "Ghost",
+        "Phase through other snakes: their bodies and heads can't hurt you, and you can't hurt them. Walls still count.",
+        110, 4f, 9f, 50f, 28f,
+    )
+    val TITAN = Power(
+        "titan", "Titan",
+        "You swell to a giant: a wider body, a bigger pickup reach, and you win every head-on.",
+        120, 5f, 11f, 55f, 30f,
+    )
+    val WARP = Power(
+        "warp", "Warp",
+        "Instantly jump a long way forward and get a short safe moment on landing. Instant: only the cooldown matters.",
+        100, 0f, 0f, 35f, 14f,
+    )
+    val TIMEWARP = Power(
+        "timewarp", "Time Warp",
+        "Every rival on the map is slowed right down while you keep full speed.",
+        140, 4f, 9f, 60f, 32f,
+    )
+
+    // New powers are appended: guests identify powers by their index in this list.
+    val all: List<Power> = listOf(SHIELD, MAGNET, OVERDRIVE, FREEZE, RECHARGE, FEAST, DASH, VACUUM, GHOST, TITAN, WARP, TIMEWARP)
     val inGame: List<Power> = all
 
     fun byId(id: String): Power? = all.firstOrNull { it.id == id }

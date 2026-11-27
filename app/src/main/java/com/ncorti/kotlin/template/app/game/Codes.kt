@@ -34,6 +34,32 @@ object Codes {
         "FLARE" to CodeReward(skin = 2),
         "SHIELDUP" to CodeReward(power = "shield"),
         "DASHNOW" to CodeReward(coins = 50, power = "dash"),
+        "GHOSTLY" to CodeReward(power = "ghost"),
+        "TITANRISE" to CodeReward(coins = 100, power = "titan"),
+        "WARPSPEED" to CodeReward(power = "warp"),
+        "SLOWMO" to CodeReward(coins = 100, power = "timewarp"),
+        "FANG" to CodeReward(skin = 8),
+        "DEEPSEA" to CodeReward(skin = 9),
+        "DRAGON" to CodeReward(coins = 300, skin = 10),
+        "VIPER" to CodeReward(skin = 11),
+        "SAKURA" to CodeReward(skin = 12),
+        "EMERALD" to CodeReward(skin = 13),
+        "STORM" to CodeReward(coins = 200, skin = 14),
+        "LAVALORD" to CodeReward(skin = 15),
+        "AURORA" to CodeReward(coins = 400, skin = 16),
+        "VOIDWALKER" to CodeReward(skin = 17),
+        "CANDY" to CodeReward(skin = 18),
+        "PRISM" to CodeReward(coins = 600, skin = 19),
+        "HUNDRED" to CodeReward(coins = 100),
+        "COINRAIN" to CodeReward(coins = 300),
+        "JACKPOT" to CodeReward(coins = 750),
+        "MEGACOINS" to CodeReward(coins = 1000),
+        "ULTRA" to CodeReward(coins = 1500),
+        "REBIRTH" to CodeReward(coins = 400),
+        "NEWSNAKE" to CodeReward(coins = 120),
+        "GAMER" to CodeReward(coins = 220),
+        "NEON" to CodeReward(coins = 180),
+        "LEGEND" to CodeReward(coins = 800, power = "shield"),
     )
 
     /** Upper-cases and strips spaces, so " starter " works. */
@@ -44,4 +70,7 @@ object Codes {
     fun isSecret(raw: String): Boolean = normalize(raw) == SECRET
 
     val count: Int get() = rewards.size
+
+    /** Every valid code (for tests). */
+    val all: Set<String> get() = rewards.keys
 }

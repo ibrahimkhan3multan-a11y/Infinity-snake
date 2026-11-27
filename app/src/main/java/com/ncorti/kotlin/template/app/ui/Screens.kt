@@ -57,7 +57,7 @@ fun SettingsScreen(app: AppState) {
                 }
                 ChipsRow("Controls", listOf("Joystick", "Touch & drag"), s.controlMode) { s.updateControlMode(it) }
                 ChipsRow("Camera view (3D tilt, like a city-chase game)", listOf("Flat top-down", "3D tilt"), if (s.view3d) 1 else 0) { s.updateView3d(it == 1) }
-                ChipsRow("Graphics quality", listOf("Low", "Medium", "High"), s.quality) { s.updateQuality(it) }
+                ChipsRow("Graphics quality", listOf("Low", "Medium", "High", "Ultra"), s.quality) { s.updateQuality(it) }
             }
         }
         NeonButton("BACKUP & RESTORE", { app.open(com.ncorti.kotlin.template.app.Screen.BACKUP) }, Modifier.fillMaxWidth().height(44.dp), accent = Neon.Cyan)

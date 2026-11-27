@@ -404,6 +404,13 @@ class World(
         for (i in 0 until n) killer[i] = NONE
         stepMode(dt, n)
 
+        // Time Warp: slow every other snake on the map.
+        for (i in 0 until n) {
+            val f = snakes[i]
+            if (!f.alive || f.timewarp <= 0f) continue
+            for (j in 0 until n) if (j != i && snakes[j].alive) snakes[j].slow = 0.25f
+        }
+
         // Freeze: slow every other snake close to a freezer.
         for (i in 0 until n) {
             val f = snakes[i]
@@ -482,14 +489,14 @@ class World(
     private fun collisions(n: Int) {
         for (i in 0 until n) {
             val a = snakes[i]
-            if (!a.alive || a.grace > 0f || a.shield > 0f || killer[i] != NONE) continue
+            if (!a.alive || a.grace > 0f || a.shield > 0f || a.ghost > 0f || killer[i] != NONE) continue
             val ax = a.xs[0]
             val ay = a.ys[0]
             val ar = a.radius * 0.8f
             for (j in 0 until n) {
                 if (j == i) continue
                 val b = snakes[j]
-                if (!b.alive || b.grace > 0f) continue
+                if (!b.alive || b.grace > 0f || b.ghost > 0f) continue
                 val lim = ar + b.radius * 0.85f
                 val lim2 = lim * lim
 
@@ -497,7 +504,7 @@ class World(
                 val hdx = ax - b.xs[0]
                 val hdy = ay - b.ys[0]
                 if (hdx * hdx + hdy * hdy < lim2) {
-                    if (b.shield > 0f || a.mass <= b.mass) killer[i] = j
+                    if (b.shield > 0f || (a.titan <= 0f && b.titan > 0f) || (a.titan > 0f == b.titan > 0f && a.mass <= b.mass)) killer[i] = j
                     continue
                 }
 

@@ -281,7 +281,7 @@ private val blitPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BIT
 private fun drawIntoNative(scope: DrawScope, session: Session3D, quality: Int) {
     val w = scope.size.width.toInt().coerceAtLeast(2)
     val h = scope.size.height.toInt().coerceAtLeast(2)
-    val maxW = if (quality == 0) 480f else if (quality == 1) 640f else 800f
+    val maxW = when (quality) { 0 -> 480f; 1 -> 640f; 2 -> 800f; else -> 960f }
     val k = minOf(1f, maxW / w)
     val bw = (w * k).toInt().coerceAtLeast(2)
     val bh = (h * k).toInt().coerceAtLeast(2)

@@ -25,6 +25,8 @@ object Cfg {
     const val MAGNET_REACH = 140f
     const val FREEZE_RADIUS = 340f
     const val FREEZE_SLOW = 0.5f
+    const val TITAN_SCALE = 1.6f
+    const val WARP_DISTANCE = 520f
     const val DASH_MULT = 1.5f
     const val VACUUM_REACH = 420f
     const val TURN_RATE = 6f

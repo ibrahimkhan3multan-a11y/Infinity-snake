@@ -35,6 +35,10 @@ class Snake(val id: Int, val isPlayer: Boolean, var name: String) {
     /** Free speed burst at the start of a life (from rebirths). Moves like Dash. */
     var rush = 0f
     var vacuum = 0f
+    /** Ghost: no snake collisions at all. Titan: giant. Time Warp: everybody else is slowed. */
+    var ghost = 0f
+    var titan = 0f
+    var timewarp = 0f
     /** Freeze power: rivals within [Cfg.FREEZE_RADIUS] get slowed. */
     var freeze = 0f
     /** Seconds of slowdown left (refreshed by a nearby freezer). */
@@ -53,11 +57,31 @@ class Snake(val id: Int, val isPlayer: Boolean, var name: String) {
     var respawnTimer = 0f
     var thinkTimer = 0f
 
-    val radius: Float
+    /** Size from mass alone (what body spacing follows, so a Titan doesn't stretch its body). */
+    private val baseRadius: Float
         get() = minOf(Cfg.MAX_RADIUS, Cfg.BASE_RADIUS + sqrt(mass) * 0.6f)
 
+    val radius: Float
+        get() = baseRadius * (if (titan > 0f) Cfg.TITAN_SCALE else 1f)
+
     val spacing: Float
-        get() = max(7f, radius * 0.9f)
+        get() = max(7f, baseRadius * 0.9f)
+
+    /** Jumps [dist] forward along the heading (the whole body moves with the head), staying inside [limit]. */
+    fun warp(dist: Float, limit: Float) {
+        var d = dist
+        val hx = xs[0] + cos(angle) * d
+        val hy = ys[0] + sin(angle) * d
+        val hr = sqrt(hx * hx + hy * hy)
+        if (hr > limit) d *= ((limit / hr).coerceIn(0f, 1f))
+        val dx = cos(angle) * d
+        val dy = sin(angle) * d
+        for (i in 0 until n) {
+            xs[i] += dx
+            ys[i] += dy
+        }
+        grace = max(grace, 0.7f)
+    }
 
     val targetSegs: Int
         get() = (Cfg.START_SEGS + mass * Cfg.SEGS_PER_MASS).toInt().coerceIn(Cfg.START_SEGS, Cfg.MAX_SEGS)
@@ -93,6 +117,9 @@ class Snake(val id: Int, val isPlayer: Boolean, var name: String) {
         dash = 0f
         rush = 0f
         vacuum = 0f
+        ghost = 0f
+        titan = 0f
+        timewarp = 0f
         freeze = 0f
         slow = 0f
     }
@@ -112,6 +139,9 @@ class Snake(val id: Int, val isPlayer: Boolean, var name: String) {
         if (dash > 0f) dash = max(0f, dash - dt)
         if (rush > 0f) rush = max(0f, rush - dt)
         if (vacuum > 0f) vacuum = max(0f, vacuum - dt)
+        if (ghost > 0f) ghost = max(0f, ghost - dt)
+        if (titan > 0f) titan = max(0f, titan - dt)
+        if (timewarp > 0f) timewarp = max(0f, timewarp - dt)
         if (freeze > 0f) freeze = max(0f, freeze - dt)
         if (slow > 0f) slow = max(0f, slow - dt)
 

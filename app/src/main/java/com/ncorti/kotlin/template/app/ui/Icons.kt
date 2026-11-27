@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.Dp
 import kotlin.math.cos
 import kotlin.math.sin
 
-enum class Ico { SHIELD, MAGNET, BOLT, COIN, BAG, SNAKE, PLAY, CROWN, TROPHY, TARGET, CHEVRONS, STAR, SNOW, REFILL, LOCK }
+enum class Ico { SHIELD, MAGNET, BOLT, COIN, BAG, SNAKE, PLAY, CROWN, TROPHY, TARGET, CHEVRONS, STAR, SNOW, REFILL, LOCK, GHOST, TITAN, WARP, CLOCK }
 
 /** Small vector icons drawn with Canvas, so the whole UI shares one crisp, tintable icon set. */
 @Composable
@@ -173,6 +173,52 @@ fun DrawScope.drawIco(kind: Ico, tint: Color) {
                 drawPath(p, tint, style = Stroke(sw * 1.3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
         }
+        Ico.GHOST -> {
+            val body = Path().apply {
+                moveTo(0.18f * w, 0.9f * h)
+                lineTo(0.18f * w, 0.45f * h)
+                cubicTo(0.18f * w, 0.1f * h, 0.82f * w, 0.1f * h, 0.82f * w, 0.45f * h)
+                lineTo(0.82f * w, 0.9f * h)
+                lineTo(0.68f * w, 0.78f * h)
+                lineTo(0.5f * w, 0.9f * h)
+                lineTo(0.32f * w, 0.78f * h)
+                close()
+            }
+            drawPath(body, tint.copy(alpha = 0.3f))
+            drawPath(body, tint, style = Stroke(sw, join = StrokeJoin.Round))
+            drawCircle(tint, w * 0.07f, Offset(0.38f * w, 0.46f * h))
+            drawCircle(tint, w * 0.07f, Offset(0.62f * w, 0.46f * h))
+        }
+        Ico.TITAN -> {
+            drawCircle(tint.copy(alpha = 0.25f), w * 0.2f, Offset(0.5f * w, 0.62f * h))
+            drawCircle(tint, w * 0.42f, Offset(0.5f * w, 0.58f * h), style = Stroke(sw))
+            for (k in 0..1) {
+                val dy = k * 0.14f * h
+                val p = Path().apply {
+                    moveTo(0.3f * w, 0.3f * h - dy + 0.14f * h)
+                    lineTo(0.5f * w, 0.14f * h - dy + 0.14f * h)
+                    lineTo(0.7f * w, 0.3f * h - dy + 0.14f * h)
+                }
+                if (k == 0) drawPath(p, tint, style = Stroke(sw, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
+        }
+        Ico.WARP -> {
+            for (k in 0..1) {
+                val dx = k * 0.3f * w
+                val p = Path().apply {
+                    moveTo(0.12f * w + dx, 0.2f * h)
+                    lineTo(0.42f * w + dx, 0.5f * h)
+                    lineTo(0.12f * w + dx, 0.8f * h)
+                }
+                drawPath(p, tint, style = Stroke(sw * 1.3f, cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
+            drawLine(tint.copy(alpha = 0.6f), Offset(0.78f * w, 0.5f * h), Offset(0.95f * w, 0.5f * h), sw, StrokeCap.Round)
+        }
+        Ico.CLOCK -> {
+            drawCircle(tint, w * 0.42f, style = Stroke(sw))
+            drawLine(tint, Offset(0.5f * w, 0.5f * h), Offset(0.5f * w, 0.22f * h), sw, StrokeCap.Round)
+            drawLine(tint, Offset(0.5f * w, 0.5f * h), Offset(0.72f * w, 0.6f * h), sw, StrokeCap.Round)
+        }
         Ico.STAR -> {
             val p = Path()
             for (i in 0 until 10) {
@@ -198,5 +244,9 @@ fun powerIcon(id: String): Ico = when (id) {
     "feast" -> Ico.STAR
     "dash" -> Ico.CHEVRONS
     "vacuum" -> Ico.TARGET
+    "ghost" -> Ico.GHOST
+    "titan" -> Ico.TITAN
+    "warp" -> Ico.WARP
+    "timewarp" -> Ico.CLOCK
     else -> Ico.CHEVRONS
 }

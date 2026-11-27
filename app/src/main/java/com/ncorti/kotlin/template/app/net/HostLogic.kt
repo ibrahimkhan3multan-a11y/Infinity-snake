@@ -109,7 +109,10 @@ class HostLogic(private val world: World, private val link: NetLink) {
 
     /** Ticks power cooldowns and sends snapshots at [Protocol.SNAPSHOT_HZ]. */
     fun afterFrame(dt: Float) {
-        for (r in remotes.values) r.kit.tick(dt)
+        for (r in remotes.values) {
+            r.kit.warpLimit = world.radius - 150f
+            r.kit.tick(dt)
+        }
         rosterTimer -= dt
         if (rosterDirty || rosterTimer <= 0f) {
             rosterTimer = 2f
@@ -173,7 +176,8 @@ class HostLogic(private val world: World, private val link: NetLink) {
                     .put(Math.round(s.angle * 100f) / 100.0).put(s.n)
                     .put(s.shield > 0f).put(s.magnet > 0f).put(s.overdrive > 0f).put(s.freeze > 0f).put(s.slow > 0f)
                     .put(s.feast > 0f).put(s.dash > 0f || s.rush > 0f).put(s.vacuum > 0f)
-                    .put(if (s.alive) Protocol.packBody(s) else JSONArray()),
+                    .put(if (s.alive) Protocol.packBody(s) else JSONArray())
+                    .put(s.ghost > 0f).put(s.titan > 0f).put(s.timewarp > 0f),
             )
         }
         val pw = JSONArray()

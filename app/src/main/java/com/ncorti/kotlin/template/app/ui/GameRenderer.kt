@@ -47,6 +47,7 @@ class GameRenderer {
             s.view3dActive = false
             drawScene(ds, s, quality, w, h, 0.5f)
             if (quality >= 1) drawVignette(ds, w, h)
+            if (quality >= 3) drawGrade(ds, w, h)
             return
         }
 
@@ -107,6 +108,17 @@ class GameRenderer {
         ds.drawRect(vignette!!)
     }
 
+    /** Ultra colour grade: a soft cool light from the top and a warm glow from the bottom. */
+    private fun drawGrade(ds: DrawScope, w: Float, h: Float) {
+        ds.drawRect(
+            Brush.verticalGradient(
+                colorStops = arrayOf(0f to Color(0x1A9BE7FF), 0.45f to Color.Transparent, 1f to Color(0x1AFF7A3D)),
+                startY = 0f,
+                endY = h,
+            ),
+        )
+    }
+
     private fun drawScene(ds: DrawScope, s: GameSession, quality: Int, w: Float, h: Float, pf: Float) {
         with(ds) {
             val zoom = s.zoom
@@ -130,6 +142,30 @@ class GameRenderer {
                     arenaR,
                     centre,
                 )
+            }
+
+            // Ultra: slow drifting nebula clouds that move at a different speed than the floor (depth).
+            if (quality >= 3) {
+                for (k in 0 until 3) {
+                    val par = 0.55f + 0.12f * k
+                    val nx = w * (0.2f + 0.3f * k) + sin(time * (0.07f + 0.03f * k) + k) * w * 0.18f - s.camX * zoom * (1f - par) * 0.25f
+                    val ny = h * (0.3f + 0.2f * k) + cos(time * (0.05f + 0.04f * k) + k * 2f) * h * 0.2f - s.camY * zoom * (1f - par) * 0.25f
+                    val nr = maxOf(w, h) * (0.55f + 0.12f * k)
+                    val c = when (k) {
+                        0 -> Color(0xFF7B2FF7)
+                        1 -> Color(0xFF00B8D4)
+                        else -> Color(0xFFFF3D81)
+                    }
+                    drawCircle(
+                        Brush.radialGradient(
+                            colorStops = arrayOf(0f to c.copy(alpha = 0.16f), 1f to c.copy(alpha = 0f)),
+                            center = Offset(nx, ny),
+                            radius = nr,
+                        ),
+                        nr,
+                        Offset(nx, ny),
+                    )
+                }
             }
 
             // Grid (the space ring below hides whatever spills past the wall).
@@ -185,11 +221,15 @@ class GameRenderer {
                 center = centre,
                 style = Stroke(width = ringWidth),
             )
-            if (quality >= 2) drawStars(w, h, s.camX, s.camY, time, 70, centre, arenaR)
+            if (quality >= 2) drawStars(w, h, s.camX, s.camY, time, if (quality >= 3) 170 else 70, centre, arenaR)
 
             // Wall: wide soft glow plus a bright pulsing line.
             if (quality >= 1) drawCircle(borderColor.copy(alpha = 0.22f), arenaR, centre, style = Stroke(width = maxOf(10f, 30f * zoom)))
             if (quality >= 2) drawCircle(borderColor.copy(alpha = 0.14f), arenaR, centre, style = Stroke(width = maxOf(14f, 56f * zoom)))
+            if (quality >= 3) {
+                drawCircle(borderColor.copy(alpha = 0.08f), arenaR, centre, style = Stroke(width = maxOf(30f, 130f * zoom)))
+                drawCircle(Color.White.copy(alpha = 0.35f), arenaR, centre, style = Stroke(width = maxOf(1f, 2.2f * zoom)))
+            }
             val pulse = 0.8f + 0.2f * sin(time * 3f)
             drawCircle(borderColor.copy(alpha = pulse), arenaR, centre, style = Stroke(width = maxOf(2f, 7f * zoom)))
 
@@ -204,8 +244,14 @@ class GameRenderer {
                 var rad = foodRadius(v) * zoom
                 if (quality >= 1) rad *= 1f + 0.12f * sin(time * 4f + i)
                 val col = Color(world.fcol[i])
-                if (quality >= 1) drawCircle(col.copy(alpha = 0.22f), rad * 2.3f, Offset(x, y))
+                if (quality >= 3) drawCircle(col.copy(alpha = 0.10f), rad * 4.2f, Offset(x, y))
+                if (quality >= 1) drawCircle(col.copy(alpha = if (quality >= 3) 0.3f else 0.22f), rad * 2.3f, Offset(x, y))
                 drawCircle(col, rad, Offset(x, y))
+                if (quality >= 3 && v >= 2f) {
+                    val ray = rad * (2.4f + 0.6f * sin(time * 6f + i))
+                    drawLine(Color.White.copy(alpha = 0.5f), Offset(x - ray, y), Offset(x + ray, y), 1.3f)
+                    drawLine(Color.White.copy(alpha = 0.5f), Offset(x, y - ray), Offset(x, y + ray), 1.3f)
+                }
                 if (quality >= 2) drawCircle(Color.White.copy(alpha = 0.55f), rad * 0.32f, Offset(x - rad * 0.28f, y - rad * 0.28f))
             }
 
@@ -218,10 +264,10 @@ class GameRenderer {
                 val head = Color(sn.headColor)
                 val tail = Color(sn.tailColor)
                 val blink = sn.grace > 0f && ((time * 8f).toInt() and 1) == 0
-                val a = if (blink) 0.4f else 1f
+                val a = if (blink || sn.ghost > 0f) 0.4f else 1f
                 val r = sn.radius * zoom
                 val n = sn.n
-                val glowOn = quality >= 1 && sn.glow
+                val glowOn = quality >= 1 && (sn.glow || quality >= 3)
                 val margin = r * 2.5f + 4f
                 var i = n - 1
                 while (i >= 0) {
@@ -234,10 +280,11 @@ class GameRenderer {
                     val t = i.toFloat() / (n - 1).coerceAtLeast(1)
                     val col = if (sn.rainbow) Color.hsv((i * 7f + time * 90f) % 360f, 0.75f, 1f) else mix(head, tail, t)
                     val taper = if (t > 0.85f) 1f - (t - 0.85f) * 2f else 1f
-                    if (glowOn && (i and 1) == 0) drawCircle(col.copy(alpha = 0.16f * a), r * taper * 1.9f, Offset(x, y))
+                    if (glowOn && (i and 1) == 0) drawCircle(col.copy(alpha = (if (quality >= 3) 0.2f else 0.16f) * a), r * taper * (if (quality >= 3) 2.4f else 1.9f), Offset(x, y))
+                    if (quality >= 3 && (i and 1) == 0) drawCircle(shade(col, 0.45f).copy(alpha = a), r * taper * 1.14f, Offset(x, y))
                     val seg = if (quality >= 1 && (i / 3) % 2 == 1) shade(col, 0.88f) else col
                     drawCircle(if (a < 1f) seg.copy(alpha = a) else seg, r * taper, Offset(x, y))
-                    if (quality >= 2 && (i and 1) == 0) {
+                    if (quality >= 2 && (i and 1) == 0 || quality >= 3) {
                         drawCircle(Color.White.copy(alpha = 0.16f * a), r * taper * 0.45f, Offset(x - r * 0.25f, y - r * 0.3f))
                     }
                     i--
@@ -247,7 +294,11 @@ class GameRenderer {
                 val hx = ox + sn.xs[0] * zoom
                 val hy = oy + sn.ys[0] * zoom
                 if (hx < -margin || hx > w + margin || hy < -margin || hy > h + margin) continue
-                if (sn.boostActive && quality >= 1) drawCircle(head.copy(alpha = 0.25f), r * 2.6f, Offset(hx, hy))
+if (sn.boostActive && quality >= 1) drawCircle(head.copy(alpha = 0.25f), r * 2.6f, Offset(hx, hy))
+                if (quality >= 3) {
+                    drawCircle(head.copy(alpha = 0.12f), r * 3.4f, Offset(hx, hy))
+                    drawCircle(Color.White.copy(alpha = 0.28f), r * 1.18f, Offset(hx, hy), style = Stroke(1.6f))
+                }
                 if (sn.magnet > 0f) {
                     val mr = (sn.radius + 16f + Cfg.MAGNET_REACH) * zoom
                     drawCircle(Color(0xFFFF3DAA).copy(alpha = 0.07f), mr, Offset(hx, hy))
@@ -270,6 +321,15 @@ class GameRenderer {
                     val vr = (sn.radius + 16f + Cfg.VACUUM_REACH) * zoom
                     drawCircle(Color(0xFFB06BFF).copy(alpha = 0.08f), vr, Offset(hx, hy))
                     drawCircle(Color(0xFFB06BFF).copy(alpha = 0.7f), vr, Offset(hx, hy), style = Stroke(3f))
+                }
+                if (sn.titan > 0f) {
+                    drawCircle(Color(0xFFFF9A3D).copy(alpha = 0.10f), r * 1.9f, Offset(hx, hy))
+                    drawCircle(Color(0xFFFF9A3D).copy(alpha = 0.55f), r * 1.5f, Offset(hx, hy), style = Stroke(2.5f))
+                }
+                if (sn.timewarp > 0f) {
+                    val pr = (60f + 30f * sin(time * 5f)) * zoom + r * 2f
+                    drawCircle(Color(0xFF7AA8FF).copy(alpha = 0.5f), pr, Offset(hx, hy), style = Stroke(2.5f))
+                    drawCircle(Color(0xFF7AA8FF).copy(alpha = 0.18f), pr * 1.5f, Offset(hx, hy), style = Stroke(2f))
                 }
                 if (sn.shield > 0f) {
                     val flicker = if (sn.shield < 1.5f && ((time * 10f).toInt() and 1) == 0) 0.35f else 1f

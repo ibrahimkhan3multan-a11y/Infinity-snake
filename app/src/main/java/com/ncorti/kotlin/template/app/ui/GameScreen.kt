@@ -300,8 +300,8 @@ fun GameScreen(app: AppState, session: GameSession) {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 horizontalAlignment = Alignment.End,
             ) {
-                // Up to four buttons per row, so a full set of eight stays on screen.
-                owned.chunked(4).forEach { row ->
+                // Up to six buttons per row, so a full set of twelve stays on screen.
+                owned.chunked(6).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
                         row.forEach { power -> PowerButton(session, power) }
                     }

@@ -334,6 +334,7 @@ class GameSession(
 
         if (p.alive && !paused) aliveTime += dt
         powers.noCooldown = settings.devNoCooldown
+        powers.warpLimit = world.radius - 150f
         if (settings.devGod && p.alive) p.shield = maxOf(p.shield, 5f)
         host?.beforeStep()
         acc += dt
@@ -671,7 +672,7 @@ class GameSession(
 
     private fun bombBlast(x: Float, y: Float) {
         if (settings.quality > 0) {
-            particles.burst(x, y, 0xFFFFA040.toInt(), if (settings.quality >= 2) 34 else 16, 340f, 7f, rnd)
+            particles.burst(x, y, 0xFFFFA040.toInt(), if (settings.quality >= 3) 60 else if (settings.quality >= 2) 34 else 16, 340f, 7f, rnd)
         }
         val p = world.player
         val dx = p.xs[0] - x
@@ -701,7 +702,7 @@ class GameSession(
             bannerTimer = 2.5f
         }
         if (settings.quality > 0) {
-            val count = if (settings.quality >= 2) 28 else 14
+            val count = if (settings.quality >= 3) 50 else if (settings.quality >= 2) 28 else 14
             particles.burst(snake.xs[0], snake.ys[0], snake.headColor, count, 260f, 6f, rnd)
         }
         if (snake.isPlayer) {

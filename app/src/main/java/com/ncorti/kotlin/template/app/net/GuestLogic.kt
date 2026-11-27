@@ -186,6 +186,9 @@ class GuestLogic(
                 s.feast = if (e.optBoolean(10)) 1f else 0f
                 s.dash = if (e.optBoolean(11)) 1f else 0f
                 s.vacuum = if (e.optBoolean(12)) 1f else 0f
+                s.ghost = if (e.optBoolean(14)) 1f else 0f
+                s.titan = if (e.optBoolean(15)) 1f else 0f
+                s.timewarp = if (e.optBoolean(16)) 1f else 0f
                 if (id == meId) {
                     s.glow = flags and Protocol.F_GLOW != 0
                     s.rainbow = flags and Protocol.F_RAINBOW != 0

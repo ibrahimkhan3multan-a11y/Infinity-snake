@@ -9,6 +9,9 @@ import kotlin.math.ceil
 class PowerState {
     val wait = FloatArray(Powers.all.size)
 
+    /** Wall radius that Warp must stay inside; the world updates it every frame. */
+    var warpLimit = Cfg.ARENA_RADIUS - 150f
+
     /** Tester option: powers can be used again straight away. */
     var noCooldown = false
 
@@ -20,6 +23,9 @@ class PowerState {
         Powers.FEAST.id -> s.feast
         Powers.DASH.id -> s.dash
         Powers.VACUUM.id -> s.vacuum
+        Powers.GHOST.id -> s.ghost
+        Powers.TITAN.id -> s.titan
+        Powers.TIMEWARP.id -> s.timewarp
         else -> 0f
     }
 
@@ -46,6 +52,10 @@ class PowerState {
             Powers.FEAST.id -> s.feast = dur
             Powers.DASH.id -> s.dash = dur
             Powers.VACUUM.id -> s.vacuum = dur
+            Powers.GHOST.id -> s.ghost = dur
+            Powers.TITAN.id -> s.titan = dur
+            Powers.TIMEWARP.id -> s.timewarp = dur
+            Powers.WARP.id -> s.warp(Cfg.WARP_DISTANCE, warpLimit)
             else -> s.energy = s.maxEnergy
         }
         wait[Powers.all.indexOf(p)] = if (noCooldown) 0f else dur + p.cooldown(level)
