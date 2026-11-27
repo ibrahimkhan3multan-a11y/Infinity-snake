@@ -73,7 +73,11 @@ class Snake(val id: Int, val isPlayer: Boolean, var name: String) {
         val hx = xs[0] + cos(angle) * d
         val hy = ys[0] + sin(angle) * d
         val hr = sqrt(hx * hx + hy * hy)
-        if (hr > limit) d *= ((limit / hr).coerceIn(0f, 1f))
+        if (hr > limit) {
+            // Land on the wall circle instead: the part of the jump that stays inside.
+            val k = limit / hr
+            d = ((hx * k - xs[0]) * cos(angle) + (hy * k - ys[0]) * sin(angle)).coerceIn(0f, d)
+        }
         val dx = cos(angle) * d
         val dy = sin(angle) * d
         for (i in 0 until n) {
