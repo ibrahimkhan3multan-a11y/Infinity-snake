@@ -111,14 +111,14 @@ fun SkinLabScreen(app: AppState) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                SkinPreview(skin, Modifier.width(150.dp).height(48.dp))
+                SkinPreview(skin, Modifier.width(120.dp).height(48.dp))
                 Text(skin.name, color = Neon.Text, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), maxLines = 1)
                 if (s.selectedSkin == skin.id) {
                     Text("SELECTED", color = Neon.Cyan, fontWeight = FontWeight.Black, fontSize = 12.sp)
                 } else {
-                    NeonButton("Select", { s.selectSkin(skin.id) }, Modifier.width(100.dp), primary = false)
+                    NeonButton("Select", { s.selectSkin(skin.id) }, Modifier.width(120.dp), primary = false)
                 }
-                NeonButton("Delete", { s.deleteCustomSkin(skin.id) }, Modifier.width(90.dp), primary = false, accent = Neon.Pink)
+                NeonButton("Delete", { s.deleteCustomSkin(skin.id) }, Modifier.width(120.dp), primary = false, accent = Neon.Pink)
             }
         }
         Text("Deleting a skin does not refund its coins. Your own skins are kept when you rebirth.", color = Neon.Dim, fontSize = 11.sp)
