@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.ncorti.kotlin.template.app.AppState
 import com.ncorti.kotlin.template.app.audio.Sfx
 import com.ncorti.kotlin.template.app.game.Skin
+import com.ncorti.kotlin.template.app.game.SkinLab
 import com.ncorti.kotlin.template.app.game.Skins
 import kotlin.math.sin
 
@@ -123,9 +124,14 @@ fun SkinsScreen(app: AppState) {
             color = Neon.Cyan,
             fontWeight = FontWeight.SemiBold,
         )
-        // A non-lazy grid inside the scrolling frame: eight fixed cards.
-        // Landscape: four cards across.
-        Skins.all.chunked(4).forEach { group ->
+        NeonButton(
+            "SKIN LAB  ·  make your own skin  ·  ${SkinLab.COST} coins",
+            { app.open(com.ncorti.kotlin.template.app.Screen.LAB) },
+            Modifier.fillMaxWidth().height(48.dp),
+            accent = Neon.Pink,
+        )
+        // A non-lazy grid inside the scrolling frame. Landscape: four cards across.
+        (Skins.all + s.customSkins).chunked(4).forEach { group ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 group.forEach { skin -> SkinCard(app, skin, Modifier.weight(1f)) }
                 repeat(4 - group.size) { Spacer(Modifier.weight(1f)) }

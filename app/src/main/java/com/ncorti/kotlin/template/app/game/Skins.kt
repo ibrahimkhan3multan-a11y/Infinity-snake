@@ -35,5 +35,8 @@ object Skins {
         Skin(19, "Infinity Prism", 2500, 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt(), true, true),
     )
 
-    fun byId(id: Int): Skin = all.firstOrNull { it.id == id } ?: all[0]
+    /** Skins made in the Skin Lab (ids from [SkinLab.FIRST_ID]). Filled in from the saved data on start. */
+    var custom: List<Skin> = emptyList()
+
+    fun byId(id: Int): Skin = all.firstOrNull { it.id == id } ?: custom.firstOrNull { it.id == id } ?: all[0]
 }

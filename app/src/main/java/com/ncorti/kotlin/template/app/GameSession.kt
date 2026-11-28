@@ -19,6 +19,7 @@ import com.ncorti.kotlin.template.app.game.Rebirth
 import com.ncorti.kotlin.template.app.game.RunStats
 import com.ncorti.kotlin.template.app.game.Skins
 import com.ncorti.kotlin.template.app.game.Snake
+import com.ncorti.kotlin.template.app.game.KillFx
 import com.ncorti.kotlin.template.app.game.TWO_PI
 import com.ncorti.kotlin.template.app.game.World
 import com.ncorti.kotlin.template.app.net.GuestLogic
@@ -118,7 +119,12 @@ class GameSession(
             object : GuestLogic.Listener {
                 override fun onKilled(victim: String) {
                     guestKills++
-                    showBanner("You eliminated $victim!", Sfx.KILL)
+                    val fx = settings.killFx
+                    killBonusCoins += fx.coinsPerKill
+                    val v = world.snakes.firstOrNull { it.name == victim && !it.isPlayer }
+                    val me = world.player
+                    playKillFx(fx, v?.xs?.get(0) ?: me.xs[0], v?.ys?.get(0) ?: me.ys[0], me.xs[0], me.ys[0], v?.headColor ?: 0xFFFFFFFF.toInt())
+                    showBanner("You eliminated $victim!" + (if (fx.coinsPerKill > 0) "  +${fx.coinsPerKill} coins" else ""), Sfx.KILL)
                 }
                 override fun onOver(score: Int, rank: Int, length: Int, kills: Int) = finalizeWith(score, rank, length, kills)
                 override fun onRespawned() = resetAfterRespawn()
@@ -206,6 +212,102 @@ class GameSession(
 
     // Counters for the quests; reset on every new life.
     private var guestKills = 0
+    /** Coins earned from the equipped kill animation's per-kill perk this life. */
+    private var killBonusCoins = 0
+
+    // Expanding rings and lightning bolts from kill animations (drawn by the renderer).
+    val fxCap = 12
+    val fxType = IntArray(fxCap)
+    val fxX = FloatArray(fxCap)
+    val fxY = FloatArray(fxCap)
+    val fxX2 = FloatArray(fxCap)
+    val fxY2 = FloatArray(fxCap)
+    val fxAge = FloatArray(fxCap)
+    val fxMax = FloatArray(fxCap)
+    val fxSize = FloatArray(fxCap)
+    val fxColor = IntArray(fxCap)
+    private var fxCursor = 0
+
+    private fun addFx(type: Int, x: Float, y: Float, x2: Float, y2: Float, max: Float, color: Int, size: Float) {
+        val i = fxCursor
+        fxCursor = (fxCursor + 1) % fxCap
+        fxType[i] = type; fxX[i] = x; fxY[i] = y; fxX2[i] = x2; fxY2[i] = y2
+        fxAge[i] = 0f; fxMax[i] = max; fxColor[i] = color; fxSize[i] = size
+    }
+
+    private fun updateFx(dt: Float) {
+        for (i in 0 until fxCap) {
+            if (fxType[i] == 0) continue
+            fxAge[i] += dt
+            if (fxAge[i] >= fxMax[i]) fxType[i] = 0
+        }
+    }
+
+    /** Plays the equipped kill animation where [vx],[vy] died; [hx],[hy] is where the killer is. */
+    private fun playKillFx(fx: KillFx, vx: Float, vy: Float, hx: Float, hy: Float, victimColor: Int) {
+        val q = settings.quality
+        val mul = when { q >= 3 -> 2f; q >= 2 -> 1.4f; q == 0 -> 0.35f; else -> 1f }
+        fun n(b: Int) = (b * mul).toInt().coerceAtLeast(3)
+        val rainbow = intArrayOf(0xFFFF5252.toInt(), 0xFFFFAB40.toInt(), 0xFFFFEE58.toInt(), 0xFF69F0AE.toInt(), 0xFF40C4FF.toInt(), 0xFF7C4DFF.toInt(), 0xFFFF4081.toInt())
+        when (fx.kind) {
+            0 -> particles.burst(vx, vy, victimColor, n(26), 260f, 6f, rnd)
+            1 -> for (c in rainbow) particles.burst(vx, vy, c, n(7), 320f, 5f, rnd)
+            2 -> {
+                addFx(1, vx, vy, 0f, 0f, 0.6f, fx.color, 280f)
+                addFx(1, vx, vy, 0f, 0f, 0.95f, fx.color2, 420f)
+                particles.burst(vx, vy, fx.color, n(18), 220f, 4f, rnd)
+            }
+            3 -> {
+                addFx(3, vx, vy, hx, hy, 0.4f, fx.color, 0f)
+                particles.burst(vx, vy, fx.color, n(20), 340f, 4f, rnd)
+                particles.burst(hx, hy, fx.color2, n(8), 200f, 3f, rnd)
+            }
+            4 -> {
+                particles.burst(vx, vy, fx.color, n(44), 230f, 8f, rnd)
+                particles.burst(vx, vy, fx.color2, n(20), 150f, 5f, rnd)
+                addFx(1, vx, vy, 0f, 0f, 0.5f, fx.color, 160f)
+            }
+            5 -> {
+                particles.burst(vx, vy, 0xFFFFFFFF.toInt(), n(50), 460f, 7f, rnd)
+                particles.burst(vx, vy, fx.color2, n(40), 320f, 6f, rnd)
+                addFx(1, vx, vy, 0f, 0f, 0.5f, 0xFFFFFFFF.toInt(), 300f)
+                addFx(1, vx, vy, 0f, 0f, 0.8f, fx.color2, 520f)
+                addFx(1, vx, vy, 0f, 0f, 1.1f, fx.color, 760f)
+                shakeTime = maxOf(shakeTime, 0.3f)
+            }
+            6 -> {
+                for (k in 0 until n(34)) {
+                    val a = rnd.nextFloat() * TWO_PI
+                    val d = 140f + rnd.nextFloat() * 60f
+                    particles.spawn(vx + cos(a) * d, vy + sin(a) * d, -cos(a) * 380f, -sin(a) * 380f, 0.5f, if (k % 2 == 0) fx.color else fx.color2, 5f)
+                }
+                addFx(2, vx, vy, 0f, 0f, 0.7f, fx.color, 200f)
+            }
+            7 -> {
+                particles.burst(vx, vy, fx.color, n(36), 280f, 7f, rnd)
+                particles.burst(vx, vy, fx.color2, n(20), 200f, 5f, rnd)
+                for (k in 0 until n(22)) {
+                    particles.spawn(vx + (rnd.nextFloat() - 0.5f) * 60f, vy, (rnd.nextFloat() - 0.5f) * 90f, -(220f + rnd.nextFloat() * 260f), 0.9f, if (k % 2 == 0) fx.color else fx.color2, 6f)
+                }
+                addFx(1, vx, vy, 0f, 0f, 0.6f, fx.color2, 240f)
+            }
+            8 -> {
+                for (k in 0 until n(46)) {
+                    val a = k * 0.55f
+                    val s = 60f + k * 6f
+                    particles.spawn(vx, vy, cos(a) * s, sin(a) * s, 0.9f, if (k % 2 == 0) fx.color else fx.color2, 4.5f)
+                }
+                addFx(1, vx, vy, 0f, 0f, 0.8f, fx.color, 300f)
+            }
+            else -> {
+                for ((i, c) in rainbow.withIndex()) particles.burst(vx, vy, c, n(9), 360f + i * 15f, 6f, rnd)
+                addFx(1, vx, vy, 0f, 0f, 0.6f, rainbow[0], 300f)
+                addFx(1, vx, vy, 0f, 0f, 0.9f, rainbow[4], 480f)
+                addFx(3, vx, vy, hx, hy, 0.4f, 0xFFFFFFFF.toInt(), 0f)
+                shakeTime = maxOf(shakeTime, 0.3f)
+            }
+        }
+    }
     private var foodEaten = 0
     private var powersUsed = 0
     private var aliveTime = 0f
@@ -348,6 +450,7 @@ class GameSession(
 
         host?.afterFrame(dt)
         particles.update(dt)
+        updateFx(dt)
         tickPowers(dt)
         updateCamera(dt, p)
         if (bannerTimer > 0f) {
@@ -450,6 +553,7 @@ class GameSession(
         if (p.alive && !paused) aliveTime += dt
         if (before == 0 && g.snapshots > 0) camInit = false
         particles.update(dt)
+        updateFx(dt)
         updateCamera(dt, p)
         hudEnergy = if (g.maxEnergy > 0f) g.energy / g.maxEnergy else 0f
         if (bannerTimer > 0f) {
@@ -484,6 +588,7 @@ class GameSession(
     private fun resetAfterRespawn() {
         finalized = false
         guestKills = 0
+        killBonusCoins = 0
         foodEaten = 0
         powersUsed = 0
         aliveTime = 0f
@@ -648,7 +753,7 @@ class GameSession(
         cancelRoute()
         finalized = true
         val previousBest = settings.highScore
-        val earned = settings.recordRun(score, rank, solo, kills)
+        val earned = settings.recordRun(score, rank, solo, kills, killBonusCoins)
         val completed = settings.applyChallenges(score, kills, rank, solo)
         settings.recordQuests(RunStats(score, kills, foodEaten, powersUsed, aliveTime.toInt(), isOnline))
         result = RunResult(
@@ -696,12 +801,20 @@ class GameSession(
 
     override fun onSnakeDied(snake: Snake, killer: Snake?) {
         host?.snakeDied(snake, killer)
+        var played = false
         if (killer != null && killer.isPlayer && !snake.isPlayer) {
-            banner = "You eliminated ${snake.name}!"
+            val fx = settings.killFx
+            killBonusCoins += fx.coinsPerKill
+            killer.energy = minOf(killer.maxEnergy, killer.energy + fx.energyPerKill)
+            killer.rush += fx.burstPerKill
+            killer.mass += fx.massPerKill
+            banner = "You eliminated ${snake.name}!" + (if (fx.coinsPerKill > 0) "  +${fx.coinsPerKill} coins" else "")
             app.audio.play(Sfx.KILL)
             bannerTimer = 2.5f
+            playKillFx(fx, snake.xs[0], snake.ys[0], killer.xs[0], killer.ys[0], snake.headColor)
+            played = true
         }
-        if (settings.quality > 0) {
+        if (!played && settings.quality > 0) {
             val count = if (settings.quality >= 3) 50 else if (settings.quality >= 2) 28 else 14
             particles.burst(snake.xs[0], snake.ys[0], snake.headColor, count, 260f, 6f, rnd)
         }

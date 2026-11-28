@@ -922,131 +922,67 @@ class GameFlowTest {
         onApp { app, _ -> app.settings.updateView3d(false) }
     }
 
-    // ---------------------------------------------------------------- real 3D gameplay
+    // ---------------------------------------------------------------- kill animations and the skin lab
 
-    private fun s3(): com.ncorti.kotlin.template.app.Session3D = onApp { app, _ -> app.session3d!! }
-
-    private fun start3d(index: Int) {
-        onApp { app, _ -> app.start3D(index) }
-        waitFor("SCORE")
+    @Test
+    fun skinLabBuildsACustomSkinForOneThousandCoins() {
+        onApp { app, _ -> app.settings.devSetCoins(1500); app.open(com.ncorti.kotlin.template.app.Screen.LAB) }
+        waitFor("Skin Lab")
+        val field = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10_000)
+        assertNotNull("text field", field)
+        field.text = "fire dragon"
+        waitFor("Fire Dragon")
+        shot("40_skin_lab_preview")
+        click("BUY · 1000")
+        pad(600)
+        assertEquals(500, onApp { app, _ -> app.settings.coins })
+        assertEquals(1, onApp { app, _ -> app.settings.customSkins.size })
+        assertTrue("custom skin equipped", onApp { app, _ -> app.settings.selectedSkin >= 100 })
+        assertEquals("Fire Dragon", onApp { app, _ -> com.ncorti.kotlin.template.app.game.Skins.byId(app.settings.selectedSkin).name })
+        waitFor("Fire Dragon")
+        shot("41_skin_lab_owned")
+        // Not enough coins for a second one.
+        field.text = "ocean shark"
+        waitFor("Ocean Shark")
+        click("BUY · 1000")
+        pad(400)
+        assertEquals(1, onApp { app, _ -> app.settings.customSkins.size })
+        assertEquals(500, onApp { app, _ -> app.settings.coins })
     }
 
     @Test
-    fun realThreeDGameLaunchesFromTheModesScreen() {
-        click("MODES")
-        waitFor("Game Modes")
-        click("3D GAMEPLAY")
-        waitFor("3D CLASSIC")
-        shot("30_modes_3d")
-        click("PLAY 3D")
-        waitFor("SCORE")
-        assertTrue("3D session running", onApp { app, _ -> app.session3d != null && app.session == null })
-        pad(1500)
-        assertTrue("3D scene drawn", onApp { app, _ -> app.session3d!!.renderer.lastDrawn } > 40)
-        assertTrue(device.hasObject(By.text("3D")))
-        shot("31_3d_classic")
-        onApp { app, _ -> app.settings.updatePlay3d(false) }
-    }
+    fun killAnimationsAreBoughtEquippedAndTheirPerksWork() {
+        onApp { app, _ -> app.settings.devSetCoins(6000) }
+        assertFalse("Confetti is not free", onApp { app, _ -> 1 in app.settings.killFxOwned })
+        assertTrue(onApp { app, _ -> app.settings.buyKillFx(2) }) // Shockwave: +12 boost energy per kill
+        assertEquals(2, onApp { app, _ -> app.settings.killFxSelected })
+        assertEquals(5700, onApp { app, _ -> app.settings.coins })
+        assertFalse("cannot buy twice", onApp { app, _ -> app.settings.buyKillFx(2) })
 
-    @Test
-    fun the2DGameStillStartsWhen3DIsNotSelected() {
-        onApp { app, _ -> app.settings.updatePlay3d(false) }
+        onApp { app, _ -> app.open(com.ncorti.kotlin.template.app.Screen.SHOP) }
+        waitFor("Shop")
+        clickScrolling("Shockwave")
+        shot("42_kill_animations_shop")
+        onApp { app, _ -> app.back() }
+
         startSolo()
-        assertTrue(onApp { app, _ -> app.session != null && app.session3d == null })
-    }
-
-    @Test
-    fun everyThreeDMapRendersAndPlays() {
-        for (i in 0..4) {
-            start3d(i)
-            onApp { app, _ ->
-                val s = app.session3d!!
-                s.autopilot = true
-                s.simulate(8f)
-            }
-            pad(900)
-            shot("32_3d_map_$i")
-            val drawn = onApp { app, _ -> app.session3d!!.renderer.lastDrawn }
-            assertTrue("map $i drew $drawn items", drawn > 40)
-            val steps = onApp { app, _ -> app.session3d!!.game.steps }
-            assertTrue("map $i moved $steps steps", steps >= 15)
+        val (gain, ringPlaying) = onApp { app, _ ->
+            val sess = app.session!!
+            val w = sess.world
+            val victim = w.spawnBot(500f, 500f, 0f, 20f, 0)
+            w.player.energy = 40f
+            val before = w.player.energy
+            sess.onSnakeDied(victim, w.player)
+            (w.player.energy - before) to (0 until sess.fxCap).any { sess.fxType[it] != 0 }
         }
-    }
+        assertTrue("Shockwave refilled boost energy: $gain", gain >= 11f)
+        assertTrue("animation ring is playing", ringPlaying)
+        pad(400)
+        shot("43_kill_animation_playing")
 
-    @Test
-    fun snakeClimbsRampsAndTheCameraKeepsTunnelsInView() {
-        start3d(0)
-        onApp { app, _ ->
-            val s = app.session3d!!
-            s.paused = true
-            s.game.placeHead(s.map.id(3, 7, 0), 1)
-            s.camera.reset(s.game)
-            s.game.advance(s.game.stepInterval * 1.5f)
-        }
-        pad(900)
-        assertTrue("head is on the ramp", onApp { app, _ -> app.session3d!!.let { it.map.isRamp(it.game.headCell) } })
-        shot("33_3d_climbing")
-        onApp { app, _ -> app.session3d!!.game.advance(app.session3d!!.game.stepInterval) }
-        assertEquals(1, onApp { app, _ -> app.session3d!!.let { it.map.cl(it.game.headCell) } })
-
-        start3d(1)
-        onApp { app, _ ->
-            val s = app.session3d!!
-            s.paused = true
-            s.game.placeHead(s.map.id(12, 3, 0), 1)
-            s.camera.reset(s.game)
-        }
-        pad(1500)
-        assertTrue("camera knows it is in a tunnel", onApp { app, _ -> app.session3d!!.camera.inTunnel })
-        assertTrue(
-            "camera outside solid rock",
-            onApp { app, _ -> app.session3d!!.let { !it.map.solidAt(it.camera.pos[0], it.camera.pos[1], it.camera.pos[2]) } },
-        )
-        shot("34_3d_tunnel")
-
-        start3d(2)
-        onApp { app, _ ->
-            val s = app.session3d!!
-            s.paused = true
-            s.game.placeHead(s.map.id(17, 11, 2), 1)
-            s.camera.reset(s.game)
-        }
-        pad(1200)
-        shot("35_3d_bridge")
-    }
-
-    @Test
-    fun threeDControlsPauseAndGameOverWork() {
-        start3d(0)
-        onApp { app, _ ->
-            val s = app.session3d!!
-            s.game.placeHead(s.map.id(3, 12, 0), 1)
-            s.camera.reset(s.game)
-        }
-        pad(300)
-        val home = onApp { app, _ -> app.session3d!!.joystick.home }
-        // Facing east, pushing the joystick to the right turns the snake south.
-        device.swipe(home.x.toInt(), home.y.toInt(), home.x.toInt() + 120, home.y.toInt(), 8)
-        pad(500)
-        assertEquals(2, onApp { app, _ -> app.session3d!!.game.heading })
-
-        device.findObject(By.desc("Pause")).click()
-        waitFor("PAUSED")
-        shot("36_3d_paused")
-        click("RESUME")
-        pad(300)
-        assertTrue(!onApp { app, _ -> app.session3d!!.paused })
-
-        // Drive into the rock wall.
-        onApp { app, _ ->
-            val s = app.session3d!!
-            s.game.placeHead(s.map.id(3, 1, 0), 0)
-        }
-        waitFor("GAME OVER")
-        shot("37_3d_game_over")
-        assertTrue(onApp { app, _ -> app.session3d!!.result != null })
-        click("MAIN MENU")
-        waitFor("PLAY")
-        assertTrue(onApp { app, _ -> app.session3d == null })
+        // The run-wide coin perk of Supernova (+10%).
+        assertTrue(onApp { app, _ -> app.settings.buyKillFx(5) })
+        val earned = onApp { app, _ -> app.settings.recordRun(400, 1, true) }
+        assertEquals(110, earned)
     }
 }

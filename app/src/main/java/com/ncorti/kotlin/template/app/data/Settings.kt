@@ -8,6 +8,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ncorti.kotlin.template.app.game.Cfg
 import com.ncorti.kotlin.template.app.game.Challenge
+import com.ncorti.kotlin.template.app.game.KillFx
+import com.ncorti.kotlin.template.app.game.KillFxs
+import com.ncorti.kotlin.template.app.game.Skin
+import com.ncorti.kotlin.template.app.game.SkinLab
 import com.ncorti.kotlin.template.app.game.Challenges
 import com.ncorti.kotlin.template.app.game.Codes
 import com.ncorti.kotlin.template.app.game.Quest
@@ -40,6 +44,16 @@ class Settings(context: Context) {
     var unlocked by mutableStateOf(parseSet(sp.getString("unlocked", "0,1")))
         private set
 
+    /** Skins made in the Skin Lab. */
+    var customSkins by mutableStateOf(loadCustomSkins().also { Skins.custom = it })
+        private set
+
+    /** Owned kill animations and the equipped one (0 = the free Pop). */
+    var killFxOwned by mutableStateOf(parseSet(sp.getString("killfx_owned", "0"), addDefaults = false) + 0)
+        private set
+    var killFxSelected by mutableIntStateOf(sp.getInt("killfx", 0))
+        private set
+
     /** Permanent power levels by id (0 = locked). */
     var powers by mutableStateOf(Powers.all.associate { it.id to sp.getInt("plevel_${it.id}", 0) })
         private set
@@ -60,26 +74,6 @@ class Settings(context: Context) {
     fun updateArenaSize(v: Int) { arenaSize = v.coerceIn(0, Cfg.ARENA_SIZES.size - 1); sp.edit().putInt("arena_size", arenaSize).apply() }
     fun updateGameMode(v: Int) { gameMode = v.coerceIn(0, 3); sp.edit().putInt("game_mode", gameMode).apply() }
     fun updateView3d(v: Boolean) { view3d = v; sp.edit().putBoolean("view3d", v).apply() }
-
-    /** True when PLAY should start the real 3D game. */
-    var play3d by mutableStateOf(sp.getBoolean("play3d", false))
-        private set
-    var map3d by mutableIntStateOf(sp.getInt("map3d", 0).coerceIn(0, 4))
-        private set
-    fun updatePlay3d(v: Boolean) { play3d = v; sp.edit().putBoolean("play3d", v).apply() }
-    fun updateMap3d(v: Int) { map3d = v.coerceIn(0, 4); sp.edit().putInt("map3d", map3d).apply() }
-    fun best3d(id: String): Int = sp.getInt("best3d_$id", 0)
-
-    /** Saves a finished 3D run. Returns (new best?, coins earned). */
-    fun record3d(id: String, score: Int): Pair<Boolean, Int> {
-        val isBest = score > best3d(id)
-        val earned = ((score / 8) * Rebirth.coinMultiplier(rebirths)).toInt()
-        coins += earned
-        val e = sp.edit().putInt("coins", coins)
-        if (isBest) e.putInt("best3d_$id", score)
-        e.apply()
-        return isBest to earned
-    }
 
     var soloMode by mutableStateOf(sp.getBoolean("solo_mode", false))
         private set
@@ -192,6 +186,81 @@ class Settings(context: Context) {
         return true
     }
 
+    // ---------------------------------------------------------------- skin lab
+
+    private fun loadCustomSkins(): List<Skin> {
+        val raw = sp.getString("custom_skins", "") ?: ""
+        if (raw.isEmpty()) return emptyList()
+        return try {
+            val a = org.json.JSONArray(raw)
+            (0 until a.length()).map {
+                val o = a.getJSONObject(it)
+                Skin(o.getInt("id"), o.getString("name"), 0, o.getInt("head"), o.getInt("tail"), o.getBoolean("glow"), o.getBoolean("rainbow"))
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun saveCustomSkins() {
+        val a = org.json.JSONArray()
+        for (k in customSkins) {
+            a.put(
+                org.json.JSONObject().put("id", k.id).put("name", k.name).put("head", k.head).put("tail", k.tail)
+                    .put("glow", k.glow).put("rainbow", k.rainbow),
+            )
+        }
+        sp.edit().putString("custom_skins", a.toString()).apply()
+        Skins.custom = customSkins
+    }
+
+    /** Buys a Skin Lab creation for [SkinLab.COST] coins and equips it. False if unaffordable or the slots are full. */
+    fun createCustomSkin(look: SkinLab.Look): Boolean {
+        if (coins < SkinLab.COST || customSkins.size >= SkinLab.MAX_CUSTOM) return false
+        val id = maxOf(SkinLab.FIRST_ID, (customSkins.maxOfOrNull { it.id } ?: 0) + 1)
+        coins -= SkinLab.COST
+        customSkins = customSkins + Skin(id, look.name, 0, look.head, look.tail, look.glow, look.rainbow)
+        unlocked = unlocked + id
+        selectedSkin = id
+        sp.edit()
+            .putInt("coins", coins)
+            .putString("unlocked", unlocked.joinToString(","))
+            .putInt("skin", id)
+            .apply()
+        saveCustomSkins()
+        return true
+    }
+
+    /** Removes a Skin Lab creation (no refund) to free a slot. */
+    fun deleteCustomSkin(id: Int) {
+        if (customSkins.none { it.id == id }) return
+        customSkins = customSkins.filter { it.id != id }
+        unlocked = unlocked - id
+        if (selectedSkin == id) selectedSkin = 0
+        sp.edit().putString("unlocked", unlocked.joinToString(",")).putInt("skin", selectedSkin).apply()
+        saveCustomSkins()
+    }
+
+    // ---------------------------------------------------------------- kill animations
+
+    val killFx: KillFx get() = KillFxs.byId(killFxSelected)
+
+    fun buyKillFx(id: Int): Boolean {
+        val fx = KillFxs.byId(id)
+        if (id in killFxOwned || coins < fx.cost) return false
+        coins -= fx.cost
+        killFxOwned = killFxOwned + id
+        sp.edit().putInt("coins", coins).putString("killfx_owned", killFxOwned.joinToString(",")).apply()
+        selectKillFx(id)
+        return true
+    }
+
+    fun selectKillFx(id: Int) {
+        if (id !in killFxOwned) return
+        killFxSelected = id
+        sp.edit().putInt("killfx", id).apply()
+    }
+
     /** Level of a permanent power: 0 = locked, 1..Powers.MAX_LEVEL. */
     fun powerLevel(id: String): Int = powers[id] ?: 0
 
@@ -218,8 +287,9 @@ class Settings(context: Context) {
     }
 
     /** Records a finished run: high score, best rank (arena only), games and earned coins. */
-    fun recordRun(score: Int, rank: Int, solo: Boolean, kills: Int = 0): Int {
-        val earned = ((score / 4 + kills * 5) * Rebirth.coinMultiplier(rebirths)).toInt()
+    fun recordRun(score: Int, rank: Int, solo: Boolean, kills: Int = 0, bonusCoins: Int = 0): Int {
+        val mult = Rebirth.coinMultiplier(rebirths) + killFx.coinPercent / 100f
+        val earned = ((score / 4 + kills * 5 + bonusCoins) * mult).toInt()
         highScore = maxOf(highScore, score)
         if (!solo && (bestRank == 0 || rank < bestRank)) bestRank = rank
         coins += earned
@@ -295,12 +365,12 @@ class Settings(context: Context) {
     fun rebirth(): Boolean {
         if (!canRebirth()) return false
         coins = 0
-        unlocked = setOf(0, 1)
+        unlocked = setOf(0, 1) + customSkins.map { it.id }
         selectedSkin = 0
         rebirths += 1
         sp.edit()
             .putInt("coins", 0)
-            .putString("unlocked", "0,1")
+            .putString("unlocked", unlocked.joinToString(","))
             .putInt("skin", 0)
             .putInt("rebirths", rebirths)
             .apply()

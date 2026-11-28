@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import com.ncorti.kotlin.template.app.game3d.MapData
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -304,7 +303,7 @@ fun RebirthScreen(app: AppState) {
             XPanel {
                 Text("NEXT REBIRTH  ·  needs $cost coins", color = Neon.Pink, fontWeight = FontWeight.Black, fontSize = 13.sp)
                 Text("You gain: +${(done + 1) * 25}% coins and a ${Rebirth.startBoost(done + 1).toInt()} s speed burst at the start of every life.", color = Neon.Lime, fontSize = 13.sp)
-                Text("You lose: ALL your coins and every skin you bought (you keep the two free skins).", color = Neon.Pink, fontSize = 13.sp)
+                Text("You lose: ALL your coins and every skin you bought (you keep the two free skins and anything made in the Skin Lab).", color = Neon.Pink, fontSize = 13.sp)
                 Text("You keep: powers, tank upgrades, scores, quests and codes.", color = Neon.Dim, fontSize = 13.sp)
                 if (!confirming) {
                     NeonButton(
@@ -482,68 +481,26 @@ fun SizeChips(app: AppState) {
 fun ModesScreen(app: AppState) {
     val s = app.settings
     ScreenFrame("Game Modes", onBack = { app.back() }) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            DimensionCard("2D GAMEPLAY", "The classic arena", !s.play3d, Neon.Cyan, Modifier.weight(1f)) { s.updatePlay3d(false) }
-            DimensionCard("3D GAMEPLAY", "Real 3D worlds with ramps and tunnels", s.play3d, Neon.Lime, Modifier.weight(1f)) { s.updatePlay3d(true) }
-        }
-        if (s.play3d) {
-            Text(
-                "Climb ramps, cross bridges, drive through tunnels. Steer with the joystick or swipe. Collect gems to grow.",
-                color = Neon.Dim, fontSize = 13.sp,
-            )
-            MapData.all.forEachIndexed { i, def ->
-                XPanel {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(def.title.uppercase(), color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 15.sp)
-                            Text(def.blurb, color = Neon.Dim, fontSize = 12.sp)
-                            Text("BEST  ${s.best3d(def.id)}", color = Neon.Cyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        NeonButton("PLAY 3D", { app.start3D(i) }, Modifier.width(120.dp).height(44.dp), accent = Neon.Lime)
-                    }
+        Text(
+            "Pick how the next match plays. Hosting on Wi-Fi? Everyone who joins plays the mode you pick.",
+            color = Neon.Dim, fontSize = 13.sp,
+        )
+        Text("MAP SIZE", color = Neon.Dim, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        SizeChips(app)
+        for (m in 0 until GameMode.COUNT) {
+            val on = s.gameMode == m
+            XPanel(
+                Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .border(2.dp, if (on) Neon.Lime else Color.Transparent, RoundedCornerShape(14.dp))
+                    .clickable { s.updateGameMode(m); app.audio.play(Sfx.CLICK) },
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(GameMode.name(m).uppercase(), color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    if (on) Text("SELECTED", color = Neon.Lime, fontWeight = FontWeight.Black, fontSize = 11.sp)
                 }
-            }
-        } else {
-            Text(
-                "Pick how the next match plays. Hosting on Wi-Fi? Everyone who joins plays the mode you pick.",
-                color = Neon.Dim, fontSize = 13.sp,
-            )
-            Text("MAP SIZE", color = Neon.Dim, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            SizeChips(app)
-            for (m in 0 until GameMode.COUNT) {
-                val on = s.gameMode == m
-                XPanel(
-                    Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                        .border(2.dp, if (on) Neon.Lime else Color.Transparent, RoundedCornerShape(14.dp))
-                        .clickable { s.updateGameMode(m); app.audio.play(Sfx.CLICK) },
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(GameMode.name(m).uppercase(), color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                        if (on) Text("SELECTED", color = Neon.Lime, fontWeight = FontWeight.Black, fontSize = 11.sp)
-                    }
-                    Text(GameMode.blurb(m), color = Neon.Dim, fontSize = 12.sp)
-                }
+                Text(GameMode.blurb(m), color = Neon.Dim, fontSize = 12.sp)
             }
         }
-    }
-}
-
-@Composable
-private fun DimensionCard(title: String, sub: String, on: Boolean, accent: Color, modifier: Modifier, onClick: () -> Unit) {
-    Column(
-        modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(Neon.Surface)
-            .border(2.dp, if (on) accent else Color(0x33FFFFFF), RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(title, color = Neon.Text, fontWeight = FontWeight.Black, fontSize = 16.sp, modifier = Modifier.weight(1f))
-            if (on) Text("ON", color = accent, fontWeight = FontWeight.Black, fontSize = 12.sp)
-        }
-        Text(sub, color = Neon.Dim, fontSize = 12.sp)
     }
 }

@@ -45,6 +45,7 @@ fun ShopScreen(app: AppState) {
         TankCard(app)
         Text("POWERS  ·  unlock once, use them every run, upgrade for longer use and shorter cooldown", color = Neon.Dim, fontSize = 11.sp, letterSpacing = 1.sp)
         Powers.all.forEach { PowerCard(app, it) }
+        KillFxSection(app)
     }
 }
 

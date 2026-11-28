@@ -410,6 +410,46 @@ if (sn.boostActive && quality >= 1) drawCircle(head.copy(alpha = 0.25f), r * 2.6
                 drawCircle(Color(p.color[i]).copy(alpha = f), p.size[i] * zoom * (0.4f + 0.6f * f), Offset(x, y))
             }
 
+            // Kill animations: expanding rings, collapsing rings and lightning bolts.
+            for (i in 0 until s.fxCap) {
+                val t = s.fxType[i]
+                if (t == 0) continue
+                val f = (s.fxAge[i] / s.fxMax[i]).coerceIn(0f, 1f)
+                val fxp = Offset(ox + s.fxX[i] * zoom, oy + s.fxY[i] * zoom)
+                val col = Color(s.fxColor[i])
+                when (t) {
+                    1, 2 -> {
+                        val k = if (t == 1) f else 1f - f
+                        val r = maxOf(2f, s.fxSize[i] * zoom * k)
+                        drawCircle(col.copy(alpha = (1f - f) * 0.14f), r, fxp)
+                        drawCircle(col.copy(alpha = (1f - f) * 0.9f), r, fxp, style = Stroke(width = (7f * (1f - f) + 1.5f) * dens))
+                    }
+                    else -> {
+                        val tx = ox + s.fxX2[i] * zoom
+                        val ty = oy + s.fxY2[i] * zoom
+                        val segs = 8
+                        var px = fxp.x
+                        var py = fxp.y
+                        val seed = i * 131 + (f * 14f).toInt() * 17
+                        val dx = tx - fxp.x
+                        val dy = ty - fxp.y
+                        val len = kotlin.math.hypot(dx, dy).coerceAtLeast(1f)
+                        val nx = -dy / len
+                        val ny = dx / len
+                        for (k in 1..segs) {
+                            val u = k / segs.toFloat()
+                            val jit = if (k == segs) 0f else sin((seed + k * 37).toFloat() * 12.9898f) * 26f * dens
+                            val qx = fxp.x + dx * u + nx * jit
+                            val qy = fxp.y + dy * u + ny * jit
+                            drawLine(col.copy(alpha = (1f - f) * 0.5f), Offset(px, py), Offset(qx, qy), 9f * dens)
+                            drawLine(Color.White.copy(alpha = 1f - f), Offset(px, py), Offset(qx, qy), 3f * dens)
+                            px = qx
+                            py = qy
+                        }
+                    }
+                }
+            }
+
         }
     }
 
